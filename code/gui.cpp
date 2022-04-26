@@ -9,9 +9,15 @@
 
 #include <SDL2/SDL.h>
 
+// u64 counter = SDL_GetPerformanceCounter();
+// u64 freq = SDL_GetPerformanceFrequency();
+// u64 cycle_count = __rdtsc();
+
 INTERNAL void
 update_and_render(BackBuffer *back_buffer, Input *input)
 {
+  TIMED_BLOCK();
+
   u32 *pixels = back_buffer->pixels;
 
   for (u32 y = 0;
@@ -134,3 +140,19 @@ main(int argc, char *argv[])
   return 0;
 }
 
+__extension__ DebugRecord debug_records[__COUNTER__];
+
+INTERNAL void
+overlay_debug_records(void)
+{
+  for (u32 debug_i = 0;
+       debug_i < ARRAY_COUNT(debug_records);
+       ++debug_i)
+  {
+    DebugRecord record = debug_records[debug_i];
+    if (record.hit_count > 0)
+    {
+      printf("%s\n", record.function_name);
+    }
+  }
+}
