@@ -36,9 +36,8 @@ obtain_mem(MemArena *arena, u64 size)
   return result;
 }
 
-
 INTERNAL LoadedBitmap
-create_empty_bitmap(MemArena *mem_arena, u32 width, u32 height)
+create_empty_bitmap(MemArena *mem_arena, u32 width, u32 height, b32 want_to_clear = true)
 {
   LoadedBitmap result = {};
 
@@ -47,15 +46,18 @@ create_empty_bitmap(MemArena *mem_arena, u32 width, u32 height)
   result.pixels = MEM_RESERVE_ARRAY(mem_arena, u32, width * height);
 
   u32 *pixel_cursor = (u32 *)result.pixels;
-  for (u32 y = 0;
-       y < height;
-       ++y)
+  if (want_to_clear)
   {
-    for (u32 x = 0;
-        x < width;
-        ++x)
+    for (u32 y = 0;
+        y < height;
+        ++y)
     {
-      *pixel_cursor++ = 0xff; 
+      for (u32 x = 0;
+          x < width;
+          ++x)
+      {
+        *pixel_cursor++ = 0xff; 
+      }
     }
   }
 
@@ -141,10 +143,10 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 x, r32 y,
   }
 }
 
-INTERNAL LoadedBitmap
-load_character(MemArena *mem_arena, FileIO *file_io, u32 codepoint, const char *file_name)
+INTERNAL Font
+load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
 {
-  LoadedBitmap result = {};
+  Font result = {};
 
   ReadFileResult font_file = file_io->read_entire_file(file_name);
   if (font_file.mem != NULL)
@@ -153,39 +155,59 @@ load_character(MemArena *mem_arena, FileIO *file_io, u32 codepoint, const char *
     stbtt_InitFont(&font, (u8 *)font_file.mem, 
                    stbtt_GetFontOffsetForIndex((u8 *)font_file.mem, 0));
 
-    // codepoint uniquely identifies glyph
-    //
-    // 128.0f --> 128pixel height
-    int width, height, offset_x, offset_y = 0;
-    u8 *monochrome_bitmap = stbtt_GetCodepointBitmap(&font, 0.0f, 
-                                                     stbtt_ScaleForPixelHeight(&font, 256.0f),
-                                                     codepoint, &width, &height, &offset_x, 
-                                                     &offset_y);
-
-    result = create_empty_bitmap(mem_arena, width, height);
-
-    u8 *bitmap_mem = monochrome_bitmap;
-    u32 *dest_mem = (u32 *)result.pixels;
-    for (s32 y = 0;
-         y < height;
-         y++)
+    for (u32 codepoint = PRINTABLE_FONT_GLYPH_START;
+         codepoint != PRINTABLE_FONT_GLYPH_END;
+         codepoint++)
     {
-      for (s32 x = 0;
-          x < width;
-          x++)
+      int width, height, offset_x, offset_y = 0;
+      u8 *monochrome_bitmap = stbtt_GetCodepointBitmap(&font, 0.0f, 
+          stbtt_ScaleForPixelHeight(&font, 256.0f),
+          codepoint, &width, &height, &offset_x, 
+          &offset_y);
+
+      LoadedBitmap ch_bitmap = create_empty_bitmap(mem_arena, width, height, false);
+
+      u8 *bitmap_mem = monochrome_bitmap;
+      u32 *dest_mem = (u32 *)ch_bitmap.pixels;
+      for (s32 y = 0;
+          y < height;
+          y++)
       {
-        u8 alpha = *bitmap_mem++;
-        *dest_mem++ = (alpha << 24 | alpha << 16 | alpha << 8 | alpha);
+        for (s32 x = 0;
+            x < width;
+            x++)
+        {
+          u8 alpha = *bitmap_mem++;
+          *dest_mem++ = (alpha << 24 | alpha << 16 | alpha << 8 | alpha);
+        }
       }
+
+      result.glyphs[codepoint] = ch_bitmap;
+
+      stbtt_FreeBitmap(monochrome_bitmap, NULL);
     }
 
-    stbtt_FreeBitmap(monochrome_bitmap, NULL);
     file_io->free_file_result(&font_file);
   }
 
   return result;
 }
 
+INTERNAL void
+draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
+{
+  LOCAL_PERSIST r32 moving_y = 0.0f;
+
+  r32 moving_x = 0.0f;
+  for (const char *ch_cursor = text; *ch_cursor != '\0'; ++ch_cursor)
+  {
+    LoadedBitmap ch_bitmap = font->glyphs[*ch_cursor];
+
+    draw_bitmap(back_buffer, &ch_bitmap, moving_x, moving_y);
+
+    moving_x += ch_bitmap.width;
+  }
+}
 
 INTERNAL void
 update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io)
@@ -198,16 +220,9 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     u8 *start_mem = (u8 *)memory->mem + sizeof(State);
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
-    
-    for (u32 codepoint = 'A';
-         codepoint <= 'Z';
-         codepoint++)
-    {
-      // TODO(Ryan): Have this load all characters at once
-      // /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
-      state->font[codepoint] = load_character(&state->mem_arena, file_io, codepoint, 
-                                              "ENDORALT.ttf");
-    }
+
+    state->font = load_font(&state->mem_arena, file_io, 
+                            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
 
     state->is_initialised = true;
   }
@@ -225,5 +240,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
       *pixels++ = 0xff0000ff;     
     }
   }
+
+  draw_text(back_buffer, "HI THERE", &state->font, 100, 100);
 
 }

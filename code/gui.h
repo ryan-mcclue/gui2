@@ -14,11 +14,19 @@ struct MemArena
   u64 used;
 };
 
+#define FONT_GLYPH_COUNT 127
+#define PRINTABLE_FONT_GLYPH_START 33
+#define PRINTABLE_FONT_GLYPH_END 126
+struct Font
+{
+  LoadedBitmap glyphs[FONT_GLYPH_COUNT];
+};
+
 struct State
 {
   b32 is_initialised;
 
   MemArena mem_arena;
 
-  LoadedBitmap font['Z' - 'A' + 1];
+  Font font;
 };

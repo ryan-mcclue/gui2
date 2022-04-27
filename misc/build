@@ -5,7 +5,8 @@ set -e
 mkdir -p build
 
 ignored_warning_flags="-Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
-  -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-result"
+  -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-result
+  -Wno-char-subscripts"
 
 dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
 # IMPORTANT(Ryan): Are we fine with breaking IEEE floating point (losing precision) for speed?
