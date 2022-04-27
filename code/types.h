@@ -22,6 +22,7 @@ typedef int32_t  s32;
 typedef int64_t  s64;
 typedef float r32;
 typedef double r64;
+typedef u32 b32;
 
 #define R32_MAX FLT_MAX
 #define R32_MIN -FLT_MAX
@@ -32,6 +33,6 @@ typedef double r64;
 #define MEGABYTES(x) \
   (KILOBYTES(x) * 1024UL)
 #define GIGABYTES(x) \
-  (GIGABYTES(x) * 1024UL)
+  (MEGABYTES(x) * 1024UL)
 #define TERABYTES(x) \
   (TERABYTES(x) * 1024UL)

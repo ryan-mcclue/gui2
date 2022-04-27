@@ -2,7 +2,7 @@
 
 struct BackBuffer
 {
-  V2 dim;
+  V2u dim;
   u32 *pixels;
 };
 
@@ -19,6 +19,12 @@ struct Input
   r32 update_delta;
 };
 
+struct Memory
+{
+  u64 size;
+  void *mem;
+};
+
 struct ReadFileResult
 {
   u64 file_size;
@@ -33,5 +39,8 @@ struct FileIO
   FreeFileResult free_file_result;
 };
 
+/*
+ * IMPORTANT(Ryan): Game implements this
+ */
 INTERNAL void
-update_and_render(BackBuffer *back_buffer, Input *input, FileIO *file_io);
+update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io);

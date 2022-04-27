@@ -8,12 +8,17 @@ union V2
     r32 x, y;
   };
 
+  r32 e[2];
+};
+
+union V2u
+{
   __extension__ struct
   {
-    r32 w, h;
+    u32 w, h;
   };
 
-  r32 e[2];
+  u32 e[2];
 };
 
 union V3

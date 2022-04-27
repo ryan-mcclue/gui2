@@ -67,7 +67,7 @@ main(int argc, char *argv[])
 {
   if (SDL_Init(SDL_INIT_VIDEO) == 0)
   {
-    V2 window_dim = {1280, 720};
+    V2u window_dim = {1280, 720};
     SDL_Window *window = SDL_CreateWindow("Name", SDL_WINDOWPOS_CENTERED, 
                           SDL_WINDOWPOS_CENTERED, window_dim.w, window_dim.h, 
                           SDL_WINDOW_RESIZABLE);
@@ -82,22 +82,28 @@ main(int argc, char *argv[])
         SDL_RenderSetLogicalSize(renderer, window_dim.w, window_dim.h);
         SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-        V2 back_buffer_dim = window_dim;
+        V2u back_buffer_dim = window_dim;
         SDL_Texture *back_buffer_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, 
                                                              SDL_TEXTUREACCESS_STREAMING,
                                                              back_buffer_dim.w, 
                                                              back_buffer_dim.h);
         if (back_buffer_texture != NULL)
         {
-          u32 *back_buffer_pixels = (u32 *)malloc(back_buffer_dim.w * back_buffer_dim.h * sizeof(u32));
-          if (back_buffer_pixels != NULL)
+          u32 back_buffer_size = back_buffer_dim.w * back_buffer_dim.h * sizeof(u32);
+          u32 memory_size = GIGABYTES(1);
+          void *mem = calloc(back_buffer_size + memory_size, 1);
+          if (mem != NULL)
           {
             BackBuffer back_buffer = {};
             back_buffer.dim = back_buffer_dim;
-            back_buffer.pixels = back_buffer_pixels;
+            back_buffer.pixels = (u32 *)mem;
 
             Input input = {};
             
+            Memory memory = {};
+            memory.size = memory_size;
+            memory.mem = (u8 *)mem + back_buffer_size;
+
             FileIO file_io = {};
             file_io.read_entire_file = read_entire_file;
             file_io.free_file_result = free_file_result;
@@ -118,9 +124,9 @@ main(int argc, char *argv[])
 
               s32 pitch = 0;
               if (SDL_LockTexture(back_buffer_texture, NULL, (void **)&back_buffer.pixels, 
-                    &pitch) == 0)
+                                  &pitch) == 0)
               {
-                update_and_render(&back_buffer, &input, &file_io);
+                update_and_render(&back_buffer, &input, &memory, &file_io);
                 
                 SDL_UnlockTexture(back_buffer_texture);
 
