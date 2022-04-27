@@ -9,13 +9,17 @@
   { 
     fprintf(stderr, "BREAKPOINT TRIGGERED! (%s:%s:%d)\n\"%s\"\n", file_name, func_name, 
             line_num, optional_message);
+#if !defined(GUI_DEBUGGER)
     exit(1);
+#endif
   }
   INTERNAL void __ebp(char const *file_name, char const *func_name, int line_num)
   { 
     fprintf(stderr, "ERRNO BREAKPOINT TRIGGERED! (%s:%s:%d)\n\"%s\"\n", file_name, 
             func_name, line_num, strerror(errno));
+#if !defined(GUI_DEBUGGER)
     exit(1);
+#endif
   }
   #define BP_MSG(msg) __bp(__FILE__, __func__, __LINE__, msg)
   #define BP() __bp(__FILE__, __func__, __LINE__)

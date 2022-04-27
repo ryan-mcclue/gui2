@@ -7,7 +7,7 @@ mkdir -p build
 ignored_warning_flags="-Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
   -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-result"
 
-dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL"
+dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
 # IMPORTANT(Ryan): Are we fine with breaking IEEE floating point (losing precision) for speed?
 #dev_type_flags="-O3 -DGUI_FAST -DGUI_EXTERNAL -ffast-math"
 
@@ -20,7 +20,7 @@ libraries="-lm -lSDL2"
 ctime -begin misc/gui.ctm
 
 g++ $common_flags $dev_type_flags \
-  code/gui.cpp -o build/gui \
+  code/sdl2-platform.cpp -o build/gui \
   $libraries
 
 ctime -end misc/gui.ctm
