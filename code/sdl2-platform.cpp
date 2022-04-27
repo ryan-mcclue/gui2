@@ -33,12 +33,15 @@ read_entire_file(const char *file_name)
     void *file_mem = malloc(file_size);
     if (file_mem != NULL)
     {
-      u64 bytes_read = 0;
+      u64 bytes_read_total = 0;
+      u64 bytes_read = 1;
       u64 bytes_to_read = file_size;
-      while (bytes_read < file_size)
+      while (bytes_read_total < file_size && bytes_read != 0)
       {
-        bytes_read += SDL_RWread(rw_ops, (u8 *)file_mem + bytes_read, 1, bytes_to_read);
-        bytes_to_read -= bytes_read; 
+        bytes_read = SDL_RWread(rw_ops, (u8 *)file_mem + bytes_read, 1, bytes_to_read);
+
+        bytes_read_total += bytes_read;
+        bytes_to_read -= bytes_read_total; 
       }
       SDL_RWclose(rw_ops);
 
