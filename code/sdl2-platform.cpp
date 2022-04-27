@@ -36,10 +36,12 @@ read_entire_file(const char *file_name)
       u64 bytes_read_total = 0;
       u64 bytes_read = 1;
       u64 bytes_to_read = file_size;
+      u8 *mem_iterator = (u8 *)file_mem;
       while (bytes_read_total < file_size && bytes_read != 0)
       {
-        bytes_read = SDL_RWread(rw_ops, (u8 *)file_mem + bytes_read, 1, bytes_to_read);
+        bytes_read = SDL_RWread(rw_ops, mem_iterator, 1, bytes_to_read);
 
+        mem_iterator += bytes_read;
         bytes_read_total += bytes_read;
         bytes_to_read -= bytes_read_total; 
       }

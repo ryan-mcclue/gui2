@@ -20,5 +20,5 @@ struct State
 
   MemArena mem_arena;
 
-  LoadedBitmap bitmap;
+  LoadedBitmap font['Z' - 'A' + 1];
 };

@@ -117,15 +117,15 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 x, r32 y,
       
       r32 red_orig = (*buffer_cursor >> 24);
       r32 new_red = (*bitmap_cursor >> 24);
-      r32 red_blended = red_orig + alpha_blend_t * (new_red - red_orig);
+      r32 red_blended = lerp(red_orig, new_red, alpha_blend_t);
 
       r32 green_orig = (*buffer_cursor >> 16 & 0xFF);
       r32 new_green = (*bitmap_cursor >> 16 & 0xFF);
-      r32 green_blended = green_orig + alpha_blend_t * (new_green - green_orig);
+      r32 green_blended = lerp(green_orig, new_green, alpha_blend_t);
 
       r32 blue_orig = (*buffer_cursor >> 8 & 0xFF);
       r32 new_blue = (*bitmap_cursor >> 8 & 0xFF);
-      r32 blue_blended = blue_orig + alpha_blend_t * (new_blue - blue_orig);
+      r32 blue_blended = lerp(blue_orig, new_blue, alpha_blend_t);
 
       *buffer_cursor = round_r32_to_u32(red_blended) << 24 | 
                        round_r32_to_u32(green_blended) << 16 | 
@@ -141,49 +141,50 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 x, r32 y,
   }
 }
 
-#if 0
 INTERNAL LoadedBitmap
-load_font(FileIO *file_io, const char *file_name)
+load_character(MemArena *mem_arena, FileIO *file_io, u32 codepoint, const char *file_name)
 {
   LoadedBitmap result = {};
 
-  ReadFileResult text_file = file_io->read_entire_file("file.txt");
-  if (text_file.mem != NULL)
+  ReadFileResult font_file = file_io->read_entire_file(file_name);
+  if (font_file.mem != NULL)
   {
     stbtt_fontinfo font = {};
-    stbtt_InitFont(&font, (u8 *)text_file.mem, 
-                   stbtt_GetFontOffsetForIndex((u8 *)text_file.mem, 0));
+    stbtt_InitFont(&font, (u8 *)font_file.mem, 
+                   stbtt_GetFontOffsetForIndex((u8 *)font_file.mem, 0));
 
     // codepoint uniquely identifies glyph
     //
     // 128.0f --> 128pixel height
-    int width, height, offset_x, offset_y;
+    int width, height, offset_x, offset_y = 0;
     u8 *monochrome_bitmap = stbtt_GetCodepointBitmap(&font, 0.0f, 
-                                                     stbtt_ScaleForPixelHeight(&font, 128.0f),
-                                                     'S', &width, &height, &offset_x, 
+                                                     stbtt_ScaleForPixelHeight(&font, 256.0f),
+                                                     codepoint, &width, &height, &offset_x, 
                                                      &offset_y);
 
-    result = make_empty_bitmap(mem_arena, width, height, false);
+    result = create_empty_bitmap(mem_arena, width, height);
 
     u8 *bitmap_mem = monochrome_bitmap;
-    u32 *dest_mem = result.mem;
-    for (u32 y = 0;
+    u32 *dest_mem = (u32 *)result.pixels;
+    for (s32 y = 0;
          y < height;
          y++)
     {
-      for (u32 x = 0;
+      for (s32 x = 0;
           x < width;
           x++)
       {
         u8 alpha = *bitmap_mem++;
-        *dest_mem++ = (alpha << 24 | alpha << 16 | alpha << 8);
+        *dest_mem++ = (alpha << 24 | alpha << 16 | alpha << 8 | alpha);
       }
     }
 
     stbtt_FreeBitmap(monochrome_bitmap, NULL);
+    file_io->free_file_result(&font_file);
   }
+
+  return result;
 }
-#endif
 
 
 INTERNAL void
@@ -198,7 +199,15 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
     
-    state->bitmap = create_empty_bitmap(&state->mem_arena, 400, 400);
+    for (u32 codepoint = 'A';
+         codepoint <= 'Z';
+         codepoint++)
+    {
+      // TODO(Ryan): Have this load all characters at once
+      // /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+      state->font[codepoint] = load_character(&state->mem_arena, file_io, codepoint, 
+                                              "ENDORALT.ttf");
+    }
 
     state->is_initialised = true;
   }
@@ -217,5 +226,4 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     }
   }
 
-  draw_bitmap(back_buffer, &state->bitmap, 200, 200);
 }
