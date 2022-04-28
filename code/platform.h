@@ -16,7 +16,7 @@ struct Input
   s32 mouse_x, mouse_y;
   DigitalButton mouse_left, mouse_right, mouse_middle;
 
-  r32 update_delta;
+  r32 update_dt;
 };
 
 struct Memory

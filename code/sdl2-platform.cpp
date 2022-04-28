@@ -64,6 +64,35 @@ read_entire_file(const char *file_name)
   return result;
 }
 
+INTERNAL u32
+get_refresh_rate(SDL_Window *window)
+{
+  u32 result = 0;
+
+  SDL_DisplayMode display_mode = {};
+
+  s32 display_index = SDL_GetWindowDisplayIndex(window);
+  if (SDL_GetCurrentDisplayMode(display_index, &display_mode) == 0)
+  {
+    // TODO(Ryan): This doesn't fully handle a variable refresh rate monitor
+    if (mode.refresh_rate == 0)
+    {
+      result = 60;
+    }
+    else
+    {
+      result = mode.refresh_rate;
+    }
+  }
+  else
+  {
+    BP_MSG(SDL_GetError());
+    result = 60;
+  }
+
+  return result;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -100,7 +129,10 @@ main(int argc, char *argv[])
             back_buffer.dim = back_buffer_dim;
             back_buffer.pixels = (u32 *)mem;
 
+            // TODO(Ryan): Will have to call again if in fullscreen mode
             Input input = {};
+            u32 refresh_rate = get_refresh_rate(window);
+            input.update_delta = 1.0f / (r32)refresh_rate;
             
             Memory memory = {};
             memory.size = memory_size;

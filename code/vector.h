@@ -11,6 +11,40 @@ union V2
   r32 e[2];
 };
 
+INTERNAL V2
+operator+(V2 a, V2 b)
+{
+  V2 result = {};
+
+  result.x = a.x + b.x;
+  result.y = a.y + b.y;
+
+  return result;
+}
+
+INTERNAL V2
+operator+(V2 a, r32 b)
+{
+  V2 result = {};
+
+  result.x = a.x + b;
+  result.y = a.y + b;
+
+  return result;
+}
+
+INTERNAL V2
+operator+(r32 a, V2 b)
+{
+  return (b + a);
+}
+
+INTERNAL V2
+operator+=(V2 a, V2 b)
+{
+
+}
+
 union V2u
 {
   __extension__ struct

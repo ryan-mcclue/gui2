@@ -193,6 +193,12 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
   return result;
 }
 
+/*
+ * 1. Piece contains bitmap and x, y location
+ */
+
+// draw_bitmap(scale/height, color);
+
 INTERNAL void
 draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
 {
@@ -207,6 +213,8 @@ draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
 
     moving_x += ch_bitmap.width;
   }
+
+  moving_y
 }
 
 INTERNAL void
