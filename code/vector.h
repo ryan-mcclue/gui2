@@ -12,6 +12,17 @@ union V2
 };
 
 INTERNAL V2
+v2(r32 x, r32 y)
+{
+  V2 result = {};
+
+  result.x = x;
+  result.y = y;
+
+  return result;
+}
+
+INTERNAL V2
 operator+(V2 a, V2 b)
 {
   V2 result = {};
@@ -36,13 +47,83 @@ operator+(V2 a, r32 b)
 INTERNAL V2
 operator+(r32 a, V2 b)
 {
-  return (b + a);
+  V2 result = {};
+
+  result.x = a + b.x;
+  result.y = a + b.y;
+
+  return result;
+}
+
+INTERNAL V2 &
+operator+=(V2 &a, V2 b)
+{
+  a = a + b;
+
+  return a;
 }
 
 INTERNAL V2
-operator+=(V2 a, V2 b)
+operator-(V2 a, V2 b)
 {
+  V2 result = {};
 
+  result.x = a.x - b.x;
+  result.y = a.y - b.y;
+
+  return result;
+}
+
+INTERNAL V2
+operator-(V2 a, r32 b)
+{
+  V2 result = {};
+
+  result.x = a.x - b;
+  result.y = a.y - b;
+
+  return result;
+}
+
+INTERNAL V2
+operator-(r32 a, V2 b)
+{
+  V2 result = {};
+
+  result.x = a - b.x;
+  result.y = a - b.y;
+
+  return result;
+}
+
+INTERNAL V2 &
+operator-=(V2 &a, V2 b)
+{
+  a = a - b;
+
+  return a;
+}
+
+INTERNAL V2
+operator*(V2 a, r32 b)
+{
+  V2 result = {};
+
+  result.x = a.x * b;
+  result.y = a.y * b;
+  
+  return result;
+}
+
+INTERNAL V2
+operator*(r32 a, V2 b)
+{
+  V2 result = {};
+
+  result.x = a * b.x;
+  result.y = a * b.y;
+  
+  return result;
 }
 
 union V2u
@@ -101,4 +182,15 @@ union V4
   r32 e[4];
 };
 
+INTERNAL V4
+v4(r32 r, r32 g, r32 b, r32 a)
+{
+  V4 result = {};
 
+  result.r = r;
+  result.g = g;
+  result.b = b;
+  result.a = a;
+
+  return result;
+}

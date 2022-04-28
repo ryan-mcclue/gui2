@@ -106,3 +106,23 @@ lerp(r32 start, r32 end, r32 p)
 
   return result;
 }
+
+INTERNAL r32
+cosine(r32 angle)
+{
+  r32 result = 0.0f;
+
+  result = cosf(angle);
+
+  return result;
+}
+
+INTERNAL r32
+sine(r32 angle)
+{
+  r32 result = 0.0f;
+
+  result = sinf(angle);
+
+  return result;
+}

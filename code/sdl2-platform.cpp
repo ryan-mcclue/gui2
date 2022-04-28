@@ -75,13 +75,13 @@ get_refresh_rate(SDL_Window *window)
   if (SDL_GetCurrentDisplayMode(display_index, &display_mode) == 0)
   {
     // TODO(Ryan): This doesn't fully handle a variable refresh rate monitor
-    if (mode.refresh_rate == 0)
+    if (display_mode.refresh_rate == 0)
     {
       result = 60;
     }
     else
     {
-      result = mode.refresh_rate;
+      result = display_mode.refresh_rate;
     }
   }
   else
@@ -132,7 +132,7 @@ main(int argc, char *argv[])
             // TODO(Ryan): Will have to call again if in fullscreen mode
             Input input = {};
             u32 refresh_rate = get_refresh_rate(window);
-            input.update_delta = 1.0f / (r32)refresh_rate;
+            input.update_dt = 1.0f / (r32)refresh_rate;
             
             Memory memory = {};
             memory.size = memory_size;

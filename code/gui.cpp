@@ -213,9 +213,77 @@ draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
 
     moving_x += ch_bitmap.width;
   }
-
-  moving_y
 }
+
+INTERNAL void
+draw_rect(BackBuffer *back_buffer, V2 min, V2 max, V4 colour)
+{
+  s32 min_x = round_r32_to_s32(min.x); 
+  s32 min_y = round_r32_to_s32(min.y); 
+  s32 max_x = round_r32_to_s32(max.x); 
+  s32 max_y = round_r32_to_s32(max.y); 
+
+  if (max_x > (s32)back_buffer->dim.w) 
+  {
+    max_x = back_buffer->dim.w;
+  }
+  if (max_y > (s32)back_buffer->dim.h)
+  {
+    max_y = back_buffer->dim.h;
+  }
+
+  if (min_x < 0) 
+  {
+    min_x = 0;
+  }
+  if (min_y < 0) 
+  {
+    min_y = 0;
+  }
+
+  for (s32 y = min_y;
+       y < max_y;
+       ++y)
+  {
+    for (s32 x = min_x;
+        x < max_x;
+        ++x)
+    {
+      u32 *pixel = back_buffer->pixels + (back_buffer->dim.w * y + x);
+
+      *pixel = (u32)(colour.r * 255.0f) << 24 | 
+               (u32)(colour.g * 255.0f) << 16 | 
+               (u32)(colour.b * 255.0f) << 8 | 
+               (u32)(colour.a * 255.0f);
+    }
+  }
+
+}
+
+INTERNAL void
+draw_coordinate(BackBuffer *back_buffer, Coordinate *coord)
+{
+  V2 point_dim = {16, 16};
+  V2 basis_point = coord->origin;
+
+  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
+
+  // this is 1-unit along the x-axis?
+  basis_point = coord->origin + coord->x_axis;
+  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
+
+  basis_point = coord->origin + coord->y_axis;
+  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
+
+  //for (u32 point_index = 0;
+  //     point_index < ARRAY_COUNT(points);
+  //     ++point_index)
+  //{
+  //  p = origin + point->x * x_axis + point->y * y_axis;
+  //  draw_rect(back_buffer, p - dim, p + dim, colour.r, colour.g, colour.b);
+  //}
+}
+
 
 INTERNAL void
 update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io)
@@ -235,6 +303,15 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     state->is_initialised = true;
   }
 
+  state->time += input->update_dt;
+
+  // TODO(Ryan): To draw points from this, they have to be normalised?
+  Coordinate coord = {};
+  coord.origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
+  coord.x_axis = 100.0f * v2(cosine(state->time), sine(state->time));
+  coord.y_axis = v2(-coord.x_axis.y, coord.x_axis.x);
+  coord.colour = v4(sine(state->time), 0, 1, 1);
+
   u32 *pixels = back_buffer->pixels;
 
   for (u32 y = 0;
@@ -249,6 +326,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     }
   }
 
-  draw_text(back_buffer, "HI THERE", &state->font, 100, 100);
+  // draw_rect(back_buffer, {100, 100}, {500, 500}, {1, 0, 1, 1});
 
+  draw_coordinate(back_buffer, &coord);
 }
