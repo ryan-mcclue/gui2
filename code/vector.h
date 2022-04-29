@@ -105,6 +105,17 @@ operator-=(V2 &a, V2 b)
 }
 
 INTERNAL V2
+operator-(V2 a)
+{
+  V2 result = {};
+
+  result.x = -a.x;
+  result.y = -a.y;
+
+  return result;
+}
+
+INTERNAL V2
 operator*(V2 a, r32 b)
 {
   V2 result = {};
@@ -123,6 +134,27 @@ operator*(r32 a, V2 b)
   result.x = a * b.x;
   result.y = a * b.y;
   
+  return result;
+}
+
+INTERNAL r32
+vec_dot(V2 a, V2 b)
+{
+  r32 result = 0.0f;
+
+  result = (a.x * b.x) + (a.y * b.y);
+
+  return result;
+}
+
+INTERNAL V2
+vec_perp(V2 a)
+{
+  V2 result = {};
+
+  result.x = -result.y;
+  result.y = result.x;
+
   return result;
 }
 

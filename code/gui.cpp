@@ -216,50 +216,95 @@ draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
 }
 
 INTERNAL void
-draw_rect(BackBuffer *back_buffer, V2 min, V2 max, V4 colour)
+draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 {
-  s32 min_x = round_r32_to_s32(min.x); 
-  s32 min_y = round_r32_to_s32(min.y); 
-  s32 max_x = round_r32_to_s32(max.x); 
-  s32 max_y = round_r32_to_s32(max.y); 
+  u32 colour32 = round_r32_to_u32(colour.r * 255.0f) << 24 | 
+                 round_r32_to_u32(colour.g * 255.0f) << 16 | 
+                 round_r32_to_u32(colour.b * 255.0f) << 8 | 
+                 round_r32_to_u32(colour.a * 255.0f);
 
-  if (max_x > (s32)back_buffer->dim.w) 
+  s32 max_width = (back_buffer->dim.w - 1);
+  s32 max_height = (back_buffer->dim.h - 1);
+
+  s32 x_min = max_width;
+  s32 y_min = max_height;
+  s32 x_max = 0;
+  s32 y_max = 0;
+
+  V2 points[4] = {origin, origin + x_axis, origin + x_axis + y_axis, origin + y_axis};
+  for (u32 p_index = 0;
+       p_index < 4;
+       ++p_index)
   {
-    max_x = back_buffer->dim.w;
-  }
-  if (max_y > (s32)back_buffer->dim.h)
-  {
-    max_y = back_buffer->dim.h;
+    V2 point = points[p_index];
+    s32 floor_x = floor_r32_to_s32(point.x);
+    s32 ceil_x = floor_r32_to_s32(point.x);
+    s32 floor_y = floor_r32_to_s32(point.y);
+    s32 ceil_y = floor_r32_to_s32(point.y);
+
+    if (x_min > floor_x)
+    {
+      x_min = floor_x;
+    }
+    if (y_min > floor_y)
+    {
+      y_min = floor_y;
+    }
+    if (x_max < ceil_x)
+    {
+      x_max = ceil_x;
+    }
+    if (y_max < ceil_y)
+    {
+      y_max = ceil_y;
+    }
   }
 
-  if (min_x < 0) 
+  if (x_min < 0)
   {
-    min_x = 0;
+    x_min = 0;
   }
-  if (min_y < 0) 
+  if (y_min < 0)
   {
-    min_y = 0;
+    y_min = 0;
+  }
+  if (x_max > max_width)
+  {
+    x_max = max_width;
+  }
+  if (y_max > max_height)
+  {
+    y_max = max_height;
   }
 
-  for (s32 y = min_y;
-       y < max_y;
+
+  for (s32 y = y_min;
+       y < y_max;
        ++y)
   {
-    for (s32 x = min_x;
-        x < max_x;
+    for (s32 x = x_min;
+        x < x_max;
         ++x)
     {
-      u32 *pixel = back_buffer->pixels + (back_buffer->dim.w * y + x);
+      V2 pixel_p = v2((r32)x, (r32)y);
 
-      *pixel = (u32)(colour.r * 255.0f) << 24 | 
-               (u32)(colour.g * 255.0f) << 16 | 
-               (u32)(colour.b * 255.0f) << 8 | 
-               (u32)(colour.a * 255.0f);
+      r32 edge0 = vec_dot(pixel_p - origin, vec_perp(x_axis));
+      r32 edge1 = vec_dot(pixel_p - (origin + x_axis), -vec_perp(y_axis));
+      r32 edge2 = vec_dot(pixel_p - (origin + x_axis + y_axis), -vec_perp(x_axis));
+      r32 edge3 = vec_dot(pixel_p - (origin + y_axis), vec_perp(y_axis));
+
+      if (edge0 >= 0 && edge1 >= 0 && edge2 >= 0 && edge3 >= 0)
+      {
+        u32 *pixel = back_buffer->pixels + (back_buffer->dim.w * y + x);
+        *pixel = colour32;
+      }
+
     }
   }
 
 }
 
+#if 0
 INTERNAL void
 draw_coordinate(BackBuffer *back_buffer, Coordinate *coord)
 {
@@ -283,6 +328,7 @@ draw_coordinate(BackBuffer *back_buffer, Coordinate *coord)
   //  draw_rect(back_buffer, p - dim, p + dim, colour.r, colour.g, colour.b);
   //}
 }
+#endif
 
 
 INTERNAL void
@@ -305,12 +351,6 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
 
   state->time += input->update_dt;
 
-  // TODO(Ryan): To draw points from this, they have to be normalised?
-  Coordinate coord = {};
-  coord.origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
-  coord.x_axis = 100.0f * v2(cosine(state->time), sine(state->time));
-  coord.y_axis = v2(-coord.x_axis.y, coord.x_axis.x);
-  coord.colour = v4(sine(state->time), 0, 1, 1);
 
   u32 *pixels = back_buffer->pixels;
 
@@ -326,7 +366,12 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     }
   }
 
-  // draw_rect(back_buffer, {100, 100}, {500, 500}, {1, 0, 1, 1});
+  V2 origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
+  V2 x_axis = 100.0f * v2(cosine(state->time), sine(state->time));
+  V2 y_axis = vec_perp(x_axis);
+  V4 colour = v4(sine(state->time), 0, 1, 1);
 
-  draw_coordinate(back_buffer, &coord);
+  draw_rect(back_buffer, origin, x_axis, y_axis, colour);
+
+  //draw_coordinate(back_buffer, &coord);
 }
