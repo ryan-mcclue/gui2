@@ -193,10 +193,6 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
   return result;
 }
 
-/*
- * 1. Piece contains bitmap and x, y location
- */
-
 // draw_bitmap(scale/height, color);
 
 INTERNAL void
@@ -218,6 +214,9 @@ draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
 INTERNAL void
 draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 {
+  r32 inv_x_axis_squared = 1.0f / vec_length_sq(x_axis);
+  r32 inv_y_axis_squared = 1.0f / vec_length_sq(y_axis);
+
   u32 colour32 = round_r32_to_u32(colour.r * 255.0f) << 24 | 
                  round_r32_to_u32(colour.g * 255.0f) << 16 | 
                  round_r32_to_u32(colour.b * 255.0f) << 8 | 
@@ -287,16 +286,28 @@ draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
         ++x)
     {
       V2 pixel_p = v2((r32)x, (r32)y);
+      V2 d = pixel_p - origin;
 
-      r32 edge0 = vec_dot(pixel_p - origin, vec_perp(x_axis));
-      r32 edge1 = vec_dot(pixel_p - (origin + x_axis), -vec_perp(y_axis));
-      r32 edge2 = vec_dot(pixel_p - (origin + x_axis + y_axis), -vec_perp(x_axis));
-      r32 edge3 = vec_dot(pixel_p - (origin + y_axis), vec_perp(y_axis));
+      // subtract origin to have rooted at appropriate rect corners
+      r32 top_edge = vec_dot(pixel_p - origin, -vec_perp(x_axis));
+      r32 right_edge = vec_dot(pixel_p - (origin + x_axis), -vec_perp(y_axis));
+      r32 bottom_edge = vec_dot(pixel_p - (origin + x_axis + y_axis), vec_perp(x_axis));
+      r32 left_edge = vec_dot(pixel_p - (origin + y_axis), vec_perp(y_axis));
 
-      if (edge0 >= 0 && edge1 >= 0 && edge2 >= 0 && edge3 >= 0)
+      if (top_edge < 0 && right_edge < 0 && bottom_edge < 0 && left_edge < 0)
       {
         u32 *pixel = back_buffer->pixels + (back_buffer->dim.w * y + x);
         *pixel = colour32;
+
+        r32 u = inv_x_axis_squared * vec_dot(d, x_axis);
+        r32 v = inv_y_axis_squared * vec_dot(d, y_axis);
+          
+        // this is texture mapping
+        s32 texel_x = round_r32_to_s32(u * (r32)(bitmap->width - 1));
+        s32 texel_y = v * (bitmap->height - 1);
+
+        u32 *texel = bitmap->pixels + (bitmap->width * texel_y + texel_x);
+
       }
 
     }
@@ -354,6 +365,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
 
   u32 *pixels = back_buffer->pixels;
 
+  // could remove this clearing
   for (u32 y = 0;
        y < back_buffer->dim.h;
        ++y)
@@ -367,8 +379,8 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
   }
 
   V2 origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
-  V2 x_axis = 100.0f * v2(cosine(state->time), sine(state->time));
-  V2 y_axis = vec_perp(x_axis);
+  V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
+  V2 y_axis = vec_perp(x_axis); 
   V4 colour = v4(sine(state->time), 0, 1, 1);
 
   draw_rect(back_buffer, origin, x_axis, y_axis, colour);

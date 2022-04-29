@@ -26,6 +26,7 @@ struct Coordinate
 {
   V2 origin, x_axis, y_axis;
   V4 colour;
+  LoadedBitmap *bitmap;
 };
 
 struct State

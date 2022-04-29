@@ -152,8 +152,18 @@ vec_perp(V2 a)
 {
   V2 result = {};
 
-  result.x = -result.y;
-  result.y = result.x;
+  result.x = -a.y;
+  result.y = a.x;
+
+  return result;
+}
+
+INTERNAL r32
+vec_length_sq(V2 a)
+{
+  r32 result = 0.0f;
+
+  result = vec_dot(a, a); 
 
   return result;
 }
