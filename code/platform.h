@@ -39,8 +39,6 @@ struct FileIO
   FreeFileResult free_file_result;
 };
 
-/*
- * IMPORTANT(Ryan): Game implements this
- */
-INTERNAL void
+typedef void (*UpdateAndRender)(BackBuffer *, Input *, Memory *, FileIO *);
+extern "C" void
 update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io);

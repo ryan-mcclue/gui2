@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: zlib-acknowledgement
+#include "types.h"
+#include "debug.h"
+#include "math.h"
+#include "vector.h"
+#include "platform.h"
 
 #include "gui.h"
 
@@ -155,10 +160,13 @@ draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 
 }
 
+// TODO(Ryan): alignment values
 INTERNAL void
-draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, V2 origin, V2 x_axis, V2 y_axis,
-            V4 colour)
+draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 scale, V2 origin, V4 colour)
 {
+  V2 x_axis = scale * v2(bitmap->width, 0);
+  V2 y_axis = scale * v2(0, bitmap->height);
+
   r32 inv_x_axis_squared = 1.0f / vec_length_sq(x_axis);
   r32 inv_y_axis_squared = 1.0f / vec_length_sq(y_axis);
 
@@ -241,6 +249,7 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, V2 origin, V2 x_axis,
         r32 u = inv_x_axis_squared * vec_dot(d, x_axis);
         r32 v = inv_y_axis_squared * vec_dot(d, y_axis);
           
+        // TODO(Ryan): Smoother with lerp (day 093)
         s32 texel_x = round_r32_to_s32(u * (r32)(bitmap->width - 1));
         s32 texel_y = v * (bitmap->height - 1);
         u32 *texel = (u32 *)bitmap->pixels + (bitmap->width * texel_y + texel_x);
@@ -289,7 +298,7 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
     {
       int width, height, offset_x, offset_y = 0;
       u8 *monochrome_bitmap = stbtt_GetCodepointBitmap(&font, 0.0f, 
-          stbtt_ScaleForPixelHeight(&font, 256.0f),
+          stbtt_ScaleForPixelHeight(&font, 128.0f),
           codepoint, &width, &height, &offset_x, 
           &offset_y);
 
@@ -321,11 +330,8 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
   return result;
 }
 
-// draw_bitmap(scale/height, color);
-
-#if 0
 INTERNAL void
-draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
+draw_text(BackBuffer *back_buffer, const char *text, Font *font, V2 origin, V2 x_axis)
 {
   LOCAL_PERSIST r32 moving_y = 0.0f;
 
@@ -334,42 +340,13 @@ draw_text(BackBuffer *back_buffer, const char *text, Font *font, r32 x, r32 y)
   {
     LoadedBitmap ch_bitmap = font->glyphs[*ch_cursor];
 
-    draw_bitmap(back_buffer, &ch_bitmap, moving_x, moving_y);
+    //draw_bitmap(back_buffer, &ch_bitmap, moving_x, moving_y);
 
     moving_x += ch_bitmap.width;
   }
 }
-#endif
 
-
-#if 0
-INTERNAL void
-draw_coordinate(BackBuffer *back_buffer, Coordinate *coord)
-{
-  V2 point_dim = {16, 16};
-  V2 basis_point = coord->origin;
-
-  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
-
-  // this is 1-unit along the x-axis?
-  basis_point = coord->origin + coord->x_axis;
-  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
-
-  basis_point = coord->origin + coord->y_axis;
-  draw_rect(back_buffer, basis_point - point_dim, basis_point + point_dim, coord->colour);
-
-  //for (u32 point_index = 0;
-  //     point_index < ARRAY_COUNT(points);
-  //     ++point_index)
-  //{
-  //  p = origin + point->x * x_axis + point->y * y_axis;
-  //  draw_rect(back_buffer, p - dim, p + dim, colour.r, colour.g, colour.b);
-  //}
-}
-#endif
-
-
-INTERNAL void
+extern "C" void
 update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io)
 {
   TIMED_BLOCK();
@@ -406,12 +383,25 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
   }
 
   V2 origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
-  V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
-  V2 y_axis = vec_perp(x_axis); 
+  //V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
   V4 colour = v4(sine(state->time), 0, 1, 1);
 
-  draw_bitmap(back_buffer, &state->font.glyphs['A'], origin, x_axis, y_axis, v4(0, 0, 1, 1));
-  //draw_rect(back_buffer, origin, x_axis, y_axis, colour);
+  draw_bitmap(back_buffer, &state->font.glyphs['A'], 1.2f, origin, v4(1, 1, 1, 1));
+}
 
-  //draw_coordinate(back_buffer, &coord);
+__extension__ DebugRecord debug_records[__COUNTER__];
+
+INTERNAL void
+overlay_debug_records(void)
+{
+  for (u32 debug_i = 0;
+       debug_i < ARRAY_COUNT(debug_records);
+       ++debug_i)
+  {
+    DebugRecord record = debug_records[debug_i];
+    if (record.hit_count > 0)
+    {
+      printf("%s\n", record.function_name);
+    }
+  }
 }

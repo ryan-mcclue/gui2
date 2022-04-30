@@ -15,8 +15,9 @@
   }
   INTERNAL void __ebp(char const *file_name, char const *func_name, int line_num)
   { 
+    char *errno_msg = strerror(errno);
     fprintf(stderr, "ERRNO BREAKPOINT TRIGGERED! (%s:%s:%d)\n\"%s\"\n", file_name, 
-            func_name, line_num, strerror(errno));
+            func_name, line_num, errno_msg);
 #if !defined(GUI_DEBUGGER)
     exit(1);
 #endif

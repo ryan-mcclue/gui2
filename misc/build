@@ -12,17 +12,19 @@ dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
 # IMPORTANT(Ryan): Are we fine with breaking IEEE floating point (losing precision) for speed?
 #dev_type_flags="-O3 -DGUI_FAST -DGUI_EXTERNAL -ffast-math"
 
-common_flags="$ignored_warning_flags -Icode -fno-exceptions -fno-rtti -std=gnu++17
+common_flags="-DGUI_LINUX $ignored_warning_flags -Icode -fno-exceptions -fno-rtti -std=gnu++17
   -Werror -Wall -Wextra -pedantic -Warray-bounds=2 
   -march=native -ffunction-sections -fdata-sections -Wl,--gc-sections"
-
-libraries="-lm -lSDL2"
 
 ctime -begin misc/gui.ctm
 
 g++ $common_flags $dev_type_flags \
   code/sdl2-platform.cpp -o build/gui \
-  $libraries
+  -lm -lSDL2
+
+g++ $common_flags $dev_type_flags \
+  -fPIC code/gui.cpp -shared -o run/gui.so \
+  -lm
 
 ctime -end misc/gui.ctm
 
