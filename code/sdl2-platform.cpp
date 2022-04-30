@@ -105,7 +105,7 @@ get_file_modification_time(const char *file_name)
   struct stat file_stat = {};
   if (stat(file_name, &file_stat) == 0)
   {
-    result = file_stat.st_mtim.tv_nsec;
+    result = file_stat.st_mtim.tv_sec;
   }
   else
   {
@@ -116,71 +116,73 @@ get_file_modification_time(const char *file_name)
   return result;
 }
 
-INTERNAL void
-copy_file(const char *src, const char *dst)
+struct LoadableUpdateAndRender
 {
-  ReadFileResult src_read = read_entire_file(src);
-  if (src_read.mem != NULL)
-  {
-    SDL_RWops *dst_ops = SDL_RWFromFile(dst, "wb");  
-    if (dst_ops != NULL)
-    {
-      if (SDL_RWwrite(dst_ops, src_read.mem, src_read.file_size, 1) < 1) 
-      {
-        BP_MSG(SDL_GetError());
-      }
+  const char *base_file;
+  const char *toggle_file; 
+  u64 base_mod_time, toggle_mod_time, current_mod_time;
+  void *load_handle;
+  UpdateAndRender update_and_render;
+};
 
-      SDL_RWclose(dst_ops);
+INTERNAL UpdateAndRender
+reload_update_and_render(LoadableUpdateAndRender *loadable_update_and_render)
+{
+  UpdateAndRender result = loadable_update_and_render->update_and_render;
+
+  u64 base_mod_time = get_file_modification_time(loadable_update_and_render->base_file);
+  u64 toggle_mod_time = get_file_modification_time(loadable_update_and_render->toggle_file);
+  u64 most_recent_mod_time = MAX(base_mod_time, toggle_mod_time);
+
+  if (most_recent_mod_time > loadable_update_and_render->current_mod_time)
+  {
+    const char *load_file = NULL;
+
+    if (base_mod_time > toggle_mod_time)
+    {
+      load_file = loadable_update_and_render->base_file;
+    }
+    else
+    {
+      load_file = loadable_update_and_render->toggle_file;
     }
 
-    free_file_result(&src_read);
-  }
-}
-
-#if 0
-INTERNAL void
-copy_file(const char *source, const char *dest)
-{
-#if defined(GUI_LINUX)
-  s32 src_fd = open(source, O_RDONLY);
-  if (src_fd == 0)
-  {
-    s32 dst_fd = open(dest, O_CREAT | O_WRONLY | O_TRUNC, 0777);
-    //s32 dst_fd = creat(dest, 0777);
-    if (dst_fd == 0)
+    void *load_handle = SDL_LoadObject(load_file);
+    if (load_handle != NULL)
     {
-      struct stat src_file_stat = {};
-      if (fstat(src_fd, &src_file_stat) == 0)
+      UpdateAndRender update_and_render = \
+        (UpdateAndRender)SDL_LoadFunction(load_handle, "update_and_render"); 
+      if (update_and_render != NULL)
       {
-        s64 src_file_size = src_file_stat.st_size;
-        // ioctl(dest_fd, FICLONE, src_fd);
-        if (sendfile(dst_fd, src_fd, NULL, src_file_size) != src_file_size) 
+        if (loadable_update_and_render->load_handle != NULL)
         {
-          EBP();
+          SDL_UnloadObject(loadable_update_and_render->load_handle);
         }
-        close(src_fd);
-        close(dst_fd);
+
+        loadable_update_and_render->load_handle = load_handle; 
+        loadable_update_and_render->current_mod_time = most_recent_mod_time;
+        loadable_update_and_render->base_mod_time = base_mod_time;
+        loadable_update_and_render->toggle_mod_time = toggle_mod_time;
+        loadable_update_and_render->update_and_render = update_and_render;
+
+        result = update_and_render;
       }
       else
       {
-        close(src_fd);
-        close(dst_fd);
+        BP_MSG(SDL_GetError());
       }
     }
     else
     {
-      close(src_fd);
-      EBP();
+      // TODO(Ryan): Distinguish between the false positive whereby we attempt to load
+      // the shared object before it has been completley written too. This generates
+      // ".so file too short".
+      // BP_MSG(SDL_GetError());
     }
   }
-  else
-  {
-    EBP();
-  }
-#endif
 
+  return result;
 }
-#endif
 
 int
 main(int argc, char *argv[])
@@ -231,99 +233,54 @@ main(int argc, char *argv[])
             file_io.read_entire_file = read_entire_file;
             file_io.free_file_result = free_file_result;
 
-            u64 current_update_and_render_mod_time = 0;
-            u64 new_update_and_render_mod_time = 0;
-            void *current_update_and_render_so = NULL;
-            void *new_update_and_render_so = NULL;
-            UpdateAndRender current_update_and_render = NULL;
-            UpdateAndRender new_update_and_render = NULL;
+            LoadableUpdateAndRender loadable_update_and_render = {};
+            loadable_update_and_render.base_file = "/home/ryan/prog/personal/gui/run/gui.so";
+            loadable_update_and_render.toggle_file = "/home/ryan/prog/personal/gui/run/gui.so.toggle";
 
-
-#define BASE_FILE "/home/ryan/prog/personal/gui/run/gui.so"
-#define COPY_FILE BASE_FILE".copy"
-
-            copy_file(BASE_FILE, COPY_FILE);
-            current_update_and_render_so = SDL_LoadObject(COPY_FILE);
-            if (current_update_and_render_so != NULL)
+            UpdateAndRender current_update_and_render = \
+              reload_update_and_render(&loadable_update_and_render);
+            if (current_update_and_render != NULL)
             {
-              current_update_and_render = \
-                (UpdateAndRender)SDL_LoadFunction(current_update_and_render_so, 
-                                                  "update_and_render");
-              if (current_update_and_render != NULL)
+              bool want_to_run = true;
+              while (want_to_run)
               {
-                current_update_and_render_mod_time = get_file_modification_time(BASE_FILE);
-
-                bool want_to_run = true;
-                while (want_to_run)
+                SDL_Event event = {};
+                while (SDL_PollEvent(&event))
                 {
-                  SDL_Event event = {};
-                  while (SDL_PollEvent(&event))
+                  if (event.type == SDL_QUIT)
                   {
-                    if (event.type == SDL_QUIT)
-                    {
-                      want_to_run = false;
-                    }
+                    want_to_run = false;
                   }
-
-                  SDL_RenderClear(renderer);
-                  
-                  new_update_and_render_mod_time = get_file_modification_time(BASE_FILE);
-                  if (new_update_and_render_mod_time != current_update_and_render_mod_time)
-                  {
-                    copy_file(BASE_FILE, COPY_FILE);
-                    new_update_and_render_so = SDL_LoadObject(COPY_FILE);
-                    if (new_update_and_render_so != NULL)
-                    {
-                      new_update_and_render = \
-                       (UpdateAndRender)SDL_LoadFunction(new_update_and_render_so, 
-                                                         "update_and_render");
-                      if (new_update_and_render != NULL)
-                      {
-                        SDL_UnloadObject(current_update_and_render_so);
-                        current_update_and_render_so = new_update_and_render_so;
-                        current_update_and_render_mod_time = new_update_and_render_mod_time;
-                        current_update_and_render = new_update_and_render;
-                      }
-                      else
-                      {
-                        BP_MSG(SDL_GetError());
-                      }
-                    }
-                    else
-                    {
-                      BP_MSG(SDL_GetError());
-                    }
-                  }
-
-                  s32 pitch = 0;
-                  if (SDL_LockTexture(back_buffer_texture, NULL, (void **)&back_buffer.pixels, 
-                        &pitch) == 0)
-                  {
-                    current_update_and_render(&back_buffer, &input, &memory, &file_io);
-
-                    SDL_UnlockTexture(back_buffer_texture);
-
-                    SDL_RenderCopy(renderer, back_buffer_texture, NULL, NULL);
-                  }
-                  else
-                  {
-                    BP_MSG(SDL_GetError());
-                  }
-
-                  SDL_RenderPresent(renderer);
                 }
-                
-              }
-              else
-              {
-                BP_MSG(SDL_GetError());
-                SDL_Quit();
+
+                SDL_RenderClear(renderer);
+
+                current_update_and_render = \
+                  reload_update_and_render(&loadable_update_and_render);
+
+                s32 pitch = 0;
+                if (SDL_LockTexture(back_buffer_texture, NULL, (void **)&back_buffer.pixels, 
+                      &pitch) == 0)
+                {
+                  current_update_and_render(&back_buffer, &input, &memory, &file_io);
+
+                  SDL_UnlockTexture(back_buffer_texture);
+
+                  SDL_RenderCopy(renderer, back_buffer_texture, NULL, NULL);
+                }
+                else
+                {
+                  BP_MSG(SDL_GetError());
+                }
+
+                SDL_RenderPresent(renderer);
               }
             }
             else
             {
               BP_MSG(SDL_GetError());
               SDL_Quit();
+              return 1;
             }
           }
           else

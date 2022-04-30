@@ -14,7 +14,8 @@ dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
 
 common_flags="-DGUI_LINUX $ignored_warning_flags -Icode -fno-exceptions -fno-rtti -std=gnu++17
   -Werror -Wall -Wextra -pedantic -Warray-bounds=2 
-  -march=native -ffunction-sections -fdata-sections -Wl,--gc-sections"
+  -march=native"
+  #-ffunction-sections -fdata-sections -Wl,--gc-sections"
 
 ctime -begin misc/gui.ctm
 
@@ -22,8 +23,19 @@ g++ $common_flags $dev_type_flags \
   code/sdl2-platform.cpp -o build/gui \
   -lm -lSDL2
 
+read -r -n 1 build_toggle < build/toggle.file
+if [ "$build_toggle" = "1" ]; then
+  toggle_name="gui.so"
+  echo 0 > build/toggle.file
+else
+  toggle_name="gui.so.toggle"
+  echo 1 > build/toggle.file
+fi
+
+printf "$toggle_name"
+
 g++ $common_flags $dev_type_flags \
-  -fPIC code/gui.cpp -shared -o run/gui.so \
+  -fPIC code/gui.cpp -shared -o run/"$toggle_name" \
   -lm
 
 ctime -end misc/gui.ctm

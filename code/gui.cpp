@@ -386,7 +386,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
   //V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
   V4 colour = v4(sine(state->time), 0, 1, 1);
 
-  draw_bitmap(back_buffer, &state->font.glyphs['A'], 1.2f, origin, v4(1, 1, 1, 1));
+  draw_bitmap(back_buffer, &state->font.glyphs['A'], 1.2f, origin, v4(1, 1, 0.8, 1));
 }
 
 __extension__ DebugRecord debug_records[__COUNTER__];
