@@ -32,8 +32,6 @@ else
   echo 1 > build/toggle.file
 fi
 
-printf "$toggle_name"
-
 g++ $common_flags $dev_type_flags \
   -fPIC code/gui.cpp -shared -o run/"$toggle_name" \
   -lm

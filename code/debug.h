@@ -38,7 +38,7 @@ struct DebugRecord
   const char *file_name;
   const char *function_name;
   u32 line_number;
-  u64 cycles;
+  u64 cycle_count;
   u32 hit_count;
 };
 
@@ -56,23 +56,22 @@ extern DebugRecord debug_records[];
 struct TimedBlock
 {
   DebugRecord *debug_record;
+  u64 start_cycle_count;
 
   TimedBlock(u32 counter, const char *file_name, u32 line_number, const char *function_name, 
              u32 hit_count_increment = 1)
   {
+    start_cycle_count = __rdtsc();
+
     debug_record = debug_records + counter;
     debug_record->file_name = file_name;
     debug_record->function_name = function_name;
     debug_record->line_number = line_number;
-    debug_record->cycles -= __rdtsc();
     debug_record->hit_count += hit_count_increment;
   }
 
   ~TimedBlock()
   {
-    debug_record->cycles += __rdtsc();
+    debug_record->cycle_count += (__rdtsc() - start_cycle_count);
   }
 };
-
-INTERNAL void
-overlay_debug_records(void);

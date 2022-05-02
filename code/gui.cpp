@@ -7,6 +7,11 @@
 
 #include "gui.h"
 
+#include <ctype.h>
+#include <stdio.h>
+INTERNAL void
+overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font);
+
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
@@ -72,6 +77,8 @@ create_empty_bitmap(MemArena *mem_arena, u32 width, u32 height, b32 want_to_clea
 INTERNAL void
 draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 {
+  TIMED_BLOCK();
+
   u32 colour32 = round_r32_to_u32(colour.r * 255.0f) << 24 | 
                  round_r32_to_u32(colour.g * 255.0f) << 16 | 
                  round_r32_to_u32(colour.b * 255.0f) << 8 | 
@@ -164,6 +171,8 @@ draw_rect(BackBuffer *back_buffer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 INTERNAL void
 draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 scale, V2 origin, V4 colour)
 {
+  TIMED_BLOCK();
+
   V2 x_axis = scale * v2(bitmap->width, 0);
   V2 y_axis = scale * v2(0, bitmap->height);
 
@@ -280,10 +289,10 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 scale, V2 origin,
   }
 }
 
-INTERNAL Font
-load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
+INTERNAL MonospaceFont
+load_monospace_font(MemArena *mem_arena, FileIO *file_io, const char *file_name, r32 pixel_height)
 {
-  Font result = {};
+  MonospaceFont result = {};
 
   ReadFileResult font_file = file_io->read_entire_file(file_name);
   if (font_file.mem != NULL)
@@ -291,14 +300,24 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
     stbtt_fontinfo font = {};
     stbtt_InitFont(&font, (u8 *)font_file.mem, 
                    stbtt_GetFontOffsetForIndex((u8 *)font_file.mem, 0));
+    // hh is currently aligned to middle. we are at top
+    // align_percentage_x = 0.0f;
+    // align_percentage_y = descent / bitmap_height;
+    r32 font_scale = stbtt_ScaleForPixelHeight(&font, pixel_height);
+    //int font_ascent = 0;
+    //stbtt_GetFontVMetrics(&font, &font_ascent, NULL, NULL);
+    //int font_baseline = (int)(font_scale * font_ascent);
 
     for (u32 codepoint = PRINTABLE_FONT_GLYPH_START;
          codepoint != PRINTABLE_FONT_GLYPH_END;
          codepoint++)
     {
+      //int x_advance = 0;
+      //stbtt_GetCodepointHMetrics(&font, codepoint, &x_advance);
+      //stbtt_GetCodepointKernAdvance()
       int width, height, offset_x, offset_y = 0;
       u8 *monochrome_bitmap = stbtt_GetCodepointBitmap(&font, 0.0f, 
-          stbtt_ScaleForPixelHeight(&font, 128.0f),
+          font_scale,
           codepoint, &width, &height, &offset_x, 
           &offset_y);
 
@@ -327,29 +346,45 @@ load_font(MemArena *mem_arena, FileIO *file_io, const char *file_name)
     file_io->free_file_result(&font_file);
   }
 
+  result.width = result.glyphs['A'].width;
+  result.height = result.glyphs['|'].height;
+
   return result;
 }
 
-INTERNAL void
-draw_text(BackBuffer *back_buffer, const char *text, Font *font, V2 origin, V2 x_axis)
-{
-  LOCAL_PERSIST r32 moving_y = 0.0f;
+// global variables won't work for hotloading
+GLOBAL r32 at_y = 0.0f;
+GLOBAL r32 left_edge = 0.0f;
 
-  r32 moving_x = 0.0f;
+INTERNAL void
+debug_reset(void)
+{
+  at_y = 0.0f;
+}
+
+INTERNAL void
+draw_debug_text(BackBuffer *back_buffer, const char *text, MonospaceFont *font)
+{
+  r32 scale = 1.0f;
+
+  r32 at_x = 0.0f;
   for (const char *ch_cursor = text; *ch_cursor != '\0'; ++ch_cursor)
   {
-    LoadedBitmap ch_bitmap = font->glyphs[*ch_cursor];
+    if (*ch_cursor != ' ')
+    {
+      LoadedBitmap ch_bitmap = font->glyphs[toupper(*ch_cursor)];
+      draw_bitmap(back_buffer, &ch_bitmap, scale, v2(left_edge + at_x, at_y), v4(1, 1, 1, 1));
+    }
 
-    //draw_bitmap(back_buffer, &ch_bitmap, moving_x, moving_y);
-
-    moving_x += ch_bitmap.width;
+    at_x += (scale * font->width); 
   }
+
+  at_y += (scale * font->height);
 }
 
 extern "C" void
 update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io)
 {
-  TIMED_BLOCK();
 
   State *state = (State *)memory->mem;
   if (!state->is_initialised)
@@ -358,16 +393,18 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
 
-    state->font = load_font(&state->mem_arena, file_io, 
-                            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
+    state->font = load_monospace_font(&state->mem_arena, file_io, 
+                            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+                            24.0f);
 
     state->is_initialised = true;
   }
 
   state->time += input->update_dt;
 
-
   u32 *pixels = back_buffer->pixels;
+
+  debug_reset();
 
   // could remove this clearing
   for (u32 y = 0;
@@ -383,25 +420,34 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
   }
 
   V2 origin = v2(back_buffer->dim.w * 0.5f, back_buffer->dim.h * 0.5f);
-  //V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
-  V4 colour = v4(sine(state->time), 0, 1, 1);
+  V2 x_axis = (50.0f + 50.0f * cosine(state->time)) * v2(cosine(state->time), sine(state->time));
+  V2 y_axis = vec_perp(x_axis);
 
-  draw_bitmap(back_buffer, &state->font.glyphs['A'], 1.2f, origin, v4(1, 1, 0.8, 1));
+  draw_rect(back_buffer, origin, x_axis, y_axis, v4(1, 1, 1, 1));
+
+  overlay_debug_records(back_buffer, &state->font);
+
 }
 
 __extension__ DebugRecord debug_records[__COUNTER__];
 
 INTERNAL void
-overlay_debug_records(void)
+overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font)
 {
   for (u32 debug_i = 0;
        debug_i < ARRAY_COUNT(debug_records);
        ++debug_i)
   {
-    DebugRecord record = debug_records[debug_i];
-    if (record.hit_count > 0)
+    DebugRecord *record = &debug_records[debug_i];
+    if (record->hit_count > 0)
     {
-      printf("%s\n", record.function_name);
+      char buf[256] = {};
+      snprintf(buf, sizeof(buf), "%32s(%4d): %10ldcy | %4dh | %10ldcy/h", record->function_name, 
+               record->line_number, record->cycle_count, record->hit_count, 
+               record->cycle_count / record->hit_count);
+      draw_debug_text(back_buffer, buf, font);
+      record->hit_count = 0;
+      record->cycle_count = 0;
     }
   }
 }

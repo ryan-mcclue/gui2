@@ -184,6 +184,16 @@ reload_update_and_render(LoadableUpdateAndRender *loadable_update_and_render)
   return result;
 }
 
+INTERNAL u64
+get_elapsed_seconds(u64 last_timer, u64 current_timer)
+{
+  u64 result = 0;
+
+  return (current_timer - last_timer) / SDL_GetPerformanceFrequency();
+
+  return result;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -241,6 +251,9 @@ main(int argc, char *argv[])
               reload_update_and_render(&loadable_update_and_render);
             if (current_update_and_render != NULL)
             {
+              // DebugFrameEndInfo debug_info = {};
+              u64 last_counter = SDL_GetPerformanceCounter(); 
+
               bool want_to_run = true;
               while (want_to_run)
               {
@@ -253,10 +266,14 @@ main(int argc, char *argv[])
                   }
                 }
 
+                // debug_info.input_processed = get_elapsed_seconds(last_counter, SDL_GetPerformanceCounter());
+
                 SDL_RenderClear(renderer);
 
                 current_update_and_render = \
                   reload_update_and_render(&loadable_update_and_render);
+
+                // debug_info.executable_ready = get_elapsed_seconds(last_counter, current_time());
 
                 s32 pitch = 0;
                 if (SDL_LockTexture(back_buffer_texture, NULL, (void **)&back_buffer.pixels, 
@@ -274,6 +291,12 @@ main(int argc, char *argv[])
                 }
 
                 SDL_RenderPresent(renderer);
+                // end_counter = current_time()
+                // last_counter = end_counter
+
+                // debug_info.end_of_frame = get_elapsed_seconds(last_counter, end_counter);
+
+                // game->debug_frame_end(&memory, &debug_info);
               }
             }
             else

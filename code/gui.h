@@ -17,16 +17,16 @@ struct MemArena
 #define FONT_GLYPH_COUNT 127
 #define PRINTABLE_FONT_GLYPH_START 33
 #define PRINTABLE_FONT_GLYPH_END 126
-struct Font
+struct MonospaceFont
 {
   LoadedBitmap glyphs[FONT_GLYPH_COUNT];
+  r32 width, height;
 };
 
-struct Coordinate
+struct Glyph
 {
-  V2 origin, x_axis, y_axis;
-  V4 colour;
-  LoadedBitmap *bitmap;
+  LoadedBitmap bitmap;
+  r32 align_percentage[2];
 };
 
 struct State
@@ -35,7 +35,7 @@ struct State
 
   MemArena mem_arena;
 
-  Font font;
+  MonospaceFont font;
 
   r32 time; 
 };
