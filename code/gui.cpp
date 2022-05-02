@@ -9,12 +9,13 @@
 
 #include <ctype.h>
 #include <stdio.h>
-INTERNAL void
-overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font);
 
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
+
+INTERNAL void
+overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font);
 
 INTERNAL MemArena
 create_mem_arena(void *mem, u64 size)
@@ -290,11 +291,11 @@ draw_bitmap(BackBuffer *back_buffer, LoadedBitmap *bitmap, r32 scale, V2 origin,
 }
 
 INTERNAL MonospaceFont
-load_monospace_font(MemArena *mem_arena, FileIO *file_io, const char *file_name, r32 pixel_height)
+load_monospace_font(MemArena *mem_arena, Functions *functions, const char *file_name, r32 pixel_height)
 {
   MonospaceFont result = {};
 
-  ReadFileResult font_file = file_io->read_entire_file(file_name);
+  ReadFileResult font_file = functions->read_entire_file(file_name);
   if (font_file.mem != NULL)
   {
     stbtt_fontinfo font = {};
@@ -343,7 +344,7 @@ load_monospace_font(MemArena *mem_arena, FileIO *file_io, const char *file_name,
       stbtt_FreeBitmap(monochrome_bitmap, NULL);
     }
 
-    file_io->free_file_result(&font_file);
+    functions->free_file_result(&font_file);
   }
 
   result.width = result.glyphs['A'].width;
@@ -383,7 +384,7 @@ draw_debug_text(BackBuffer *back_buffer, const char *text, MonospaceFont *font)
 }
 
 extern "C" void
-update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io)
+update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, Functions *functions)
 {
 
   State *state = (State *)memory->mem;
@@ -393,7 +394,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO 
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
 
-    state->font = load_monospace_font(&state->mem_arena, file_io, 
+    state->font = load_monospace_font(&state->mem_arena, functions, 
                             "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
                             24.0f);
 
@@ -434,20 +435,36 @@ __extension__ DebugRecord debug_records[__COUNTER__];
 INTERNAL void
 overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font)
 {
-  for (u32 debug_i = 0;
-       debug_i < ARRAY_COUNT(debug_records);
-       ++debug_i)
+  for (u32 debug_counter = 0;
+       debug_counter < ARRAY_COUNT(debug_state->counters);
+       ++debug_counter)
   {
+    DebugCounterState counter_state = debug_state->counters[debug_counter];
+    DebugCounterSnapshot counter_snapshot = counter_state.snapshots[0];
+
     DebugRecord *record = &debug_records[debug_i];
     if (record->hit_count > 0)
     {
+      // output
       char buf[256] = {};
       snprintf(buf, sizeof(buf), "%32s(%4d): %10ldcy | %4dh | %10ldcy/h", record->function_name, 
                record->line_number, record->cycle_count, record->hit_count, 
                record->cycle_count / record->hit_count);
       draw_debug_text(back_buffer, buf, font);
+
+      // update
       record->hit_count = 0;
       record->cycle_count = 0;
     }
   }
+}
+
+void
+debug_frame_end(Memory *memory, DebugFrameEndInfo *debug_info)
+{
+  DebugState *debug_state = (DebugState *)memory->debug_memory;
+
+  update_debug_records();
+
+  overlay_debug_records();
 }

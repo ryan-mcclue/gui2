@@ -10,12 +10,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sys/sendfile.h>
-#include <fcntl.h>
-
-// u64 counter = SDL_GetPerformanceCounter();
-// u64 freq = SDL_GetPerformanceFrequency();
-// u64 cycle_count = __rdtsc();
 
 INTERNAL void
 free_file_result(ReadFileResult *read_file_result)
@@ -150,6 +144,7 @@ reload_update_and_render(LoadableUpdateAndRender *loadable_update_and_render)
     void *load_handle = SDL_LoadObject(load_file);
     if (load_handle != NULL)
     {
+      // load("debug_frame_end");
       UpdateAndRender update_and_render = \
         (UpdateAndRender)SDL_LoadFunction(load_handle, "update_and_render"); 
       if (update_and_render != NULL)
@@ -184,10 +179,10 @@ reload_update_and_render(LoadableUpdateAndRender *loadable_update_and_render)
   return result;
 }
 
-INTERNAL u64
+INTERNAL r32
 get_elapsed_seconds(u64 last_timer, u64 current_timer)
 {
-  u64 result = 0;
+  r32 result = 0;
 
   return (current_timer - last_timer) / SDL_GetPerformanceFrequency();
 
@@ -239,9 +234,9 @@ main(int argc, char *argv[])
             memory.size = memory_size;
             memory.mem = (u8 *)mem + back_buffer_size;
 
-            FileIO file_io = {};
-            file_io.read_entire_file = read_entire_file;
-            file_io.free_file_result = free_file_result;
+            Functions functions = {};
+            functions.read_entire_file = read_entire_file;
+            functions.free_file_result = free_file_result;
 
             LoadableUpdateAndRender loadable_update_and_render = {};
             loadable_update_and_render.base_file = "/home/ryan/prog/personal/gui/run/gui.so";
@@ -251,7 +246,8 @@ main(int argc, char *argv[])
               reload_update_and_render(&loadable_update_and_render);
             if (current_update_and_render != NULL)
             {
-              // DebugFrameEndInfo debug_info = {};
+              DebugFrameEndInfo debug_info = {};
+
               u64 last_counter = SDL_GetPerformanceCounter(); 
 
               bool want_to_run = true;
@@ -266,20 +262,19 @@ main(int argc, char *argv[])
                   }
                 }
 
-                // debug_info.input_processed = get_elapsed_seconds(last_counter, SDL_GetPerformanceCounter());
+                debug_info.events_processed = get_elapsed_seconds(last_counter, 
+                                                                  SDL_GetPerformanceCounter());
 
                 SDL_RenderClear(renderer);
 
                 current_update_and_render = \
                   reload_update_and_render(&loadable_update_and_render);
 
-                // debug_info.executable_ready = get_elapsed_seconds(last_counter, current_time());
-
                 s32 pitch = 0;
                 if (SDL_LockTexture(back_buffer_texture, NULL, (void **)&back_buffer.pixels, 
                       &pitch) == 0)
                 {
-                  current_update_and_render(&back_buffer, &input, &memory, &file_io);
+                  current_update_and_render(&back_buffer, &input, &memory, &functions);
 
                   SDL_UnlockTexture(back_buffer_texture);
 
@@ -291,12 +286,16 @@ main(int argc, char *argv[])
                 }
 
                 SDL_RenderPresent(renderer);
-                // end_counter = current_time()
-                // last_counter = end_counter
 
-                // debug_info.end_of_frame = get_elapsed_seconds(last_counter, end_counter);
+                u64 end_counter = SDL_GetPerformanceCounter();
+                last_counter = end_counter;
 
-                // game->debug_frame_end(&memory, &debug_info);
+                debug_info.end_of_frame = get_elapsed_seconds(last_counter, end_counter);
+
+                // if (game_functions->debug_frame_end)
+                // {
+                // game_functions->debug_frame_end(&memory, &debug_info)
+                // };
               }
             }
             else

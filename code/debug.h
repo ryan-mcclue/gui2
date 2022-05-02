@@ -75,3 +75,24 @@ struct TimedBlock
     debug_record->cycle_count += (__rdtsc() - start_cycle_count);
   }
 };
+
+
+struct DebugCounterSnapshot
+{
+  u64 cycle_count;
+  u32 hit_count;
+};
+
+struct DebugCounterState
+{
+  const char *file_name;
+  const char *function_name;
+  u32 line_number;
+
+  DebugCounterSnapshot counter_snapshots[120];
+};
+
+struct DebugState
+{
+  DebugCounterState counter_states[512];
+};

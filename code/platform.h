@@ -23,6 +23,9 @@ struct Memory
 {
   u64 size;
   void *mem;
+
+  u64 debug_size;
+  void *debug_memory;
 };
 
 struct ReadFileResult
@@ -31,14 +34,20 @@ struct ReadFileResult
   void *mem;
 };
 
+struct DebugFrameEndInfo
+{
+  r32 events_processed; 
+  r32 end_of_frame; 
+};
+
 typedef ReadFileResult (*ReadEntireFile)(const char *file_name);
 typedef void (*FreeFileResult)(ReadFileResult *read_file_result);
-struct FileIO
+struct Functions
 {
   ReadEntireFile read_entire_file;
   FreeFileResult free_file_result;
 };
 
-typedef void (*UpdateAndRender)(BackBuffer *, Input *, Memory *, FileIO *);
+typedef void (*UpdateAndRender)(BackBuffer *, Input *, Memory *, Functions *);
 extern "C" void
-update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, FileIO *file_io);
+update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, Functions *functions);
