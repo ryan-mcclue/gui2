@@ -76,23 +76,69 @@ struct TimedBlock
   }
 };
 
-
 struct DebugCounterSnapshot
 {
   u64 cycle_count;
   u32 hit_count;
 };
 
+#define DEBUG_SNAPSHOT_MAX_COUNT 120
 struct DebugCounterState
 {
   const char *file_name;
   const char *function_name;
   u32 line_number;
 
-  DebugCounterSnapshot counter_snapshots[120];
+  DebugCounterSnapshot snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
 };
 
 struct DebugState
 {
+  u32 counter_count;
+  u32 snapshot_index;
   DebugCounterState counter_states[512];
 };
+
+struct DebugStatistic
+{
+  r64 min, max, avg;
+  u32 count; 
+};
+INTERNAL DebugStatistic
+begin_debug_statistic(void)
+{
+  DebugStatistic result = {};
+  
+  result.min = R32_MAX;
+  result.max = R32_MIN;
+  result.avg = 0.0f;
+
+  return result;
+}
+INTERNAL void
+end_debug_statistic(DebugStatistic *debug_statistic)
+{
+  if (debug_statistic->count != 0)
+  {
+    debug_statistic->avg /= debug_statistic->count;
+  }
+  else
+  {
+    debug_statistic->min = debug_statistic->max = 0.0f;
+  }
+}
+INTERNAL void
+update_debug_statistic(DebugStatistic *debug_statistic, r64 value)
+{
+  debug_statistic->count++;
+
+  if (value < debug_statistic->min)
+  {
+    debug_statistic->min = value;
+  }
+  if (value > debug_statistic->max)
+  {
+    debug_statistic->max = value;
+  }
+  debug_statistic->avg += value;
+}

@@ -433,29 +433,67 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, Functio
 __extension__ DebugRecord debug_records[__COUNTER__];
 
 INTERNAL void
-overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font)
+update_debug_records(DebugState *debug_state)
+{
+  for (u32 debug_i = 0;
+       debug_i < ARRAY_COUNT(debug_records);
+       ++debug_i)
+  {
+    DebugRecord *src = debug_records + debug_i;
+    if (src->hit_count > 0)
+    {
+      DebugCounterState *dst = &debug_state->counter_states[debug_state->counter_count]; 
+
+      dst->file_name = src->file_name;
+      dst->function_name = src->function_name;
+      dst->line_number = src->line_number;
+      dst->snapshots[debug_state->snapshot_index].cycle_count = src->cycle_count;
+      dst->snapshots[debug_state->snapshot_index].hit_count = src->hit_count;
+
+      debug_state->counter_count++;
+
+      src->hit_count = 0;
+      src->cycle_count = 0;
+    }
+  }
+   
+}
+
+INTERNAL void
+overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_state)
 {
   for (u32 debug_counter = 0;
-       debug_counter < ARRAY_COUNT(debug_state->counters);
+       debug_counter < debug_state->counter_count;
        ++debug_counter)
   {
     DebugCounterState counter_state = debug_state->counters[debug_counter];
-    DebugCounterSnapshot counter_snapshot = counter_state.snapshots[0];
 
-    DebugRecord *record = &debug_records[debug_i];
-    if (record->hit_count > 0)
+    DebugStatistic hit_count_statistic = begin_debug_statistic();
+    DebugStatistic cycle_count_statistic = begin_debug_statistic();
+    DebugStatistic cycles_over_hits_statistic = begin_debug_statistic();
+    for (u32 snapshot_i = 0;
+         snapshot_i < DEBUG_SNAPSHOT_MAX_COUNT;
+         ++snapshot_i)
     {
-      // output
-      char buf[256] = {};
-      snprintf(buf, sizeof(buf), "%32s(%4d): %10ldcy | %4dh | %10ldcy/h", record->function_name, 
-               record->line_number, record->cycle_count, record->hit_count, 
-               record->cycle_count / record->hit_count);
-      draw_debug_text(back_buffer, buf, font);
-
-      // update
-      record->hit_count = 0;
-      record->cycle_count = 0;
+      DebugCounterSnapshot counter_snapshot = counter_state.snapshots[snapshot_i]; 
+      update_debug_statistic(&hit_count_statistic, counter_snapshot.hit_count); 
+      if (counter_snapshot.hit_count > 0)
+      {
+        update_debug_statistic(&cycles_over_hits_statistic, 
+                               counter_snapshot.cycles / counter_snapshot.hit_count); 
+      }
     }
+
+    if (hit_count_statistic.max)
+    {
+      char buf[256] = {};
+      snprintf(buf, sizeof(buf), "%32s(%4d): %10ldcy | %4dh | %10ldcy/h", 
+          counter_state.function_name, counter_state.line_number, 
+          counter_snapshot.cycle_count, counter_snapshot.hit_count, 
+          counter_snapshot.cycle_count / counter_snapshot.hit_count);
+      draw_debug_text(back_buffer, buf, font);
+    }
+
   }
 }
 
@@ -463,8 +501,21 @@ void
 debug_frame_end(Memory *memory, DebugFrameEndInfo *debug_info)
 {
   DebugState *debug_state = (DebugState *)memory->debug_memory;
+  // allows setting to 0 for debug builds
+  if (debug_state != NULL)
+  {
+    debug_state->counter_count = 0;
 
-  update_debug_records();
+    update_debug_records(debug_state);
 
-  overlay_debug_records();
+    // this is called in update_and_render()?
+    // just updating that is done in platform?
+    // overlay_debug_records(back_buffer, font, debug_state);
+
+    debug_state->snapshot_index++;
+    if (debug_state->snapshot_index >= DEBUG_SNAPSHOT_MAX_COUNT)
+    {
+      debug_state->snapshot_index = 0;
+    }
+  }
 }
