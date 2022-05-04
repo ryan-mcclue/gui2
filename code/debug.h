@@ -76,6 +76,20 @@ struct TimedBlock
   }
 };
 
+struct DebugTimer
+{
+  const char *name;
+  r32 seconds_snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
+};
+
+// could change this to RootDebugInfo 
+struct PlatformDebugInfo
+{
+  u32 timer_count;
+  r32 total_seconds;
+  DebugTimer debug_timers[64];
+};
+
 struct DebugCounterSnapshot
 {
   u64 cycle_count;
@@ -97,6 +111,10 @@ struct DebugState
   u32 counter_count;
   u32 snapshot_index;
   DebugCounterState counter_states[512];
+
+  // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
+
+  // TODO(Ryan): Include layout/font information
 };
 
 struct DebugStatistic

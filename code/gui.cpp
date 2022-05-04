@@ -15,7 +15,7 @@
 #include "stb_truetype.h"
 
 INTERNAL void
-overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font);
+debug_overlay(BackBuffer *back_buffer, MonospaceFont *font);
 
 INTERNAL MemArena
 create_mem_arena(void *mem, u64 size)
@@ -460,7 +460,7 @@ update_debug_records(DebugState *debug_state)
 }
 
 INTERNAL void
-overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_state)
+debug_overlay(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_state)
 {
   for (u32 debug_counter = 0;
        debug_counter < debug_state->counter_count;
@@ -484,6 +484,28 @@ overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font, DebugState *
       }
     }
 
+    if (cycle_count_statistic.max > 0.0f)
+    {
+      for (u32 snapshot_i = 0;
+          snapshot_i < DEBUG_SNAPSHOT_MAX_COUNT;
+          ++snapshot_i)
+      {
+        DebugCounterSnapshot counter_snapshot = counter_state.snapshots[snapshot_i]; 
+
+        r32 chart_height = debug_font->height * font_scale;
+        r32 scale = 1.0f / counter_snapshot[snapshot_i].cycle_count;
+
+        r32 this_height = scale * chart_height;
+        r32 chart_min_y = at_y;
+
+        r32 chart_left = 0.0f;
+
+        V2 origin = v2(chart_left, chart_min_y);
+        // have separate routine for drawing rotated
+        draw_rect(back_buffer, origin, origin + v2(1, 0), origin + v2(0, this_height) , v4(scale, 1, 0, 1));
+      }
+    }
+
     if (hit_count_statistic.max)
     {
       char buf[256] = {};
@@ -494,11 +516,41 @@ overlay_debug_records(BackBuffer *back_buffer, MonospaceFont *font, DebugState *
       draw_debug_text(back_buffer, buf, font);
     }
 
+    V4 colors[] =
+    {
+      // primaries and secondaries
+      {1, 0, 0, 0},
+      {0, 1, 0, 0},
+      {0, 0, 1, 0},
+      {1, 1, 0, 0},
+      {1, 0, 1, 0},
+      {0, 1, 1, 0}
+    };
+
+    r32 prev_seconds = 0.0f;
+    r32 prev_min_y;
+    r32 chart_height = 300.0f;
+    // We want the chart to be 33.3ms
+    r32 scale = root_debug_info->total_seconds / 0.0333f; 
+    for (u32 timer_i = 0;
+         timer_i < root_debug_info->timer_count;
+         ++timer_i)
+    {
+      V4 active_colour = colours[timer_i % ARRAY_COUNT(colours)];
+      DebugTimer debug_timer = root_debug_info->timers[timer_i];
+      r32 this_seconds = debug_timer.seconds - prev_seconds;
+      prev_seconds = this_seconds;
+      r32 this_scale = scale / this_seconds;
+
+      r32 bar_height = chart_height * this_scale;
+
+    }
+
   }
 }
 
 void
-debug_frame_end(Memory *memory, DebugFrameEndInfo *debug_info)
+debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
 {
   DebugState *debug_state = (DebugState *)memory->debug_memory;
   // allows setting to 0 for debug builds
@@ -508,9 +560,8 @@ debug_frame_end(Memory *memory, DebugFrameEndInfo *debug_info)
 
     update_debug_records(debug_state);
 
-    // this is called in update_and_render()?
-    // just updating that is done in platform?
-    // overlay_debug_records(back_buffer, font, debug_state);
+    // update_platform_debug_records();
+    // IMPORTANT: just updating that is done in platform
 
     debug_state->snapshot_index++;
     if (debug_state->snapshot_index >= DEBUG_SNAPSHOT_MAX_COUNT)
