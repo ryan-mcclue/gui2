@@ -552,15 +552,53 @@ debug_overlay(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_st
 void
 debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
 {
+  u32 event_count = debug_event_index; 
+  debug_event_index = 0;   
+
   DebugState *debug_state = (DebugState *)memory->debug_memory;
   // allows setting to 0 for debug builds
   if (debug_state != NULL)
   {
     debug_state->counter_count = 0;
 
+#if 0
     update_debug_records(debug_state);
+    update_platform_debug_records();
+#else
+    // collate_debug_records() below
+    for (u32 counter_i = 0;
+         counter_i < debug_state->counter_count;
+         ++counter_i)
+    {
+      DebugCounterState *counter_states = debug_state->counter_states + counter_i;
+      counter_states[debug_state->snapshot_index].hit_count = 0;
+      counter_states[debug_state->snapshot_index].cycle_count = 0;
+    }
+    
+    for (u32 event_i = 0;
+         event_i < event_count;
+         event_i++)
+    {
+      DebugEvent *event = debug_events + event_count;
 
-    // update_platform_debug_records();
+      DebugCounterState *dst = debug_state->counter_states + event->debug_record_index;
+      DebugRecord *src = debug_records + event->debug_record_index; 
+
+      dst->file_name = src->file_name;
+      dst->function_name = src->function_name;
+      dst->line_number = src->line_number;
+
+      if (event->type == DEBUG_EVENT_BEGIN_BLOCK)
+      {
+        dst->snapshots[debug_state->snapshot_index].hit_count++;
+        dst->snapshots[debug_state->snapshot_index].cycle_count -= event->clocks; 
+      }
+      else
+      {
+        dst->snapshots[debug_state->snapshot_index].cycle_count += event->clocks; 
+      }
+    }
+#endif
     // IMPORTANT: just updating that is done in platform
 
     debug_state->snapshot_index++;

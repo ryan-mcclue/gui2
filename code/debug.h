@@ -57,24 +57,70 @@ struct TimedBlock
 {
   DebugRecord *debug_record;
   u64 start_cycle_count;
+  u32 counter;
 
-  TimedBlock(u32 counter, const char *file_name, u32 line_number, const char *function_name, 
+  TimedBlock(u32 counter_init, const char *file_name, u32 line_number, const char *function_name, 
              u32 hit_count_increment = 1)
   {
     start_cycle_count = __rdtsc();
+
+    counter = counter_init;
 
     debug_record = debug_records + counter;
     debug_record->file_name = file_name;
     debug_record->function_name = function_name;
     debug_record->line_number = line_number;
     debug_record->hit_count += hit_count_increment;
+
+    // Logging approach below?
+    // so now we record everything that happened that frame
+    u32 event_index = debug_event_index++;
+    ASSERT(event_index < MAX_EVENT_DEBUG_COUNT);
+    DebugEvent *event = debug_event_array + event_index;
+    event->clock = __rdtsc();
+    event->debug_record_index = (u16)counter;
+    event->debug_record_array_index = 0;
+    event->type = DEBUG_EVENT_BEGIN_BLOCK;
   }
 
   ~TimedBlock()
   {
     debug_record->cycle_count += (__rdtsc() - start_cycle_count);
+
+    // Logging approach below?
+    // #define RECORD_DEBUG_EVENT(counter, event_type)
+    u32 event_index = debug_event_index++;
+    ASSERT(event_index < MAX_EVENT_DEBUG_COUNT);
+    DebugEvent *event = debug_event_array + event_index;
+    event->clock = __rdtsc();
+    event->debug_record_index = (u16)counter;
+    event->debug_record_array_index = 0;
+    event->type = DEBUG_EVENT_END_BLOCK;
   }
 };
+
+
+enum DEBUG_EVENT_TYPE
+{
+  DEBUG_EVENT_BEGIN_BLOCK,
+  DEBUG_EVENT_END_BLOCK
+};
+// this is for logging, so size is of more concern?
+struct DebugEvent
+{
+  u64 clock;
+  // u16 core_index;
+  // u16 thread_index;
+  u16 debug_record_index;
+  // TODO(Ryan): This is only required for HH multiple builds?...
+  u16 debug_record_array_index;
+  u8 type;
+};
+// IMPORTANT(Ryan): If doing multithreading, probably have some double-buffering scheme,
+// whereby one buffer is where writing to and then other is for reading
+#define MAX_EVENT_DEBUG_COUNT 65536
+extern DebugEvent debug_event_array[MAX_EVENT_DEBUG_COUNT];
+extern u32 debug_event_index; // where we are trying to write to
 
 struct DebugTimer
 {
@@ -106,6 +152,7 @@ struct DebugCounterState
   DebugCounterSnapshot snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
 };
 
+// DebugHistory
 struct DebugState
 {
   u32 counter_count;
@@ -160,3 +207,18 @@ update_debug_statistic(DebugStatistic *debug_statistic, r64 value)
   }
   debug_statistic->avg += value;
 }
+
+
+// DebugInformation
+#define MAX_DEBUG_TRANSLATION_UNITS 2
+struct DebugTable
+{
+  DebugEvent debug_events[MAX_DEBUG_EVENT_COUNT];
+  DebugRecords debug_records[MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_RECORD_COUNT];
+};
+
+// defined in platform?
+extern GLOBAL DebugTable global_debug_table;
+
+// end of timer usage
+#define DEBUG_RECORDS_COUNT __COUNTER__
