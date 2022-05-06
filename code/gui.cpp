@@ -433,7 +433,7 @@ update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, Functio
 __extension__ DebugRecord debug_records[__COUNTER__];
 
 INTERNAL void
-update_debug_records(DebugState *debug_state)
+update_debug_records_snapshots(DebugState *debug_state)
 {
   for (u32 debug_i = 0;
        debug_i < ARRAY_COUNT(debug_records);
@@ -459,8 +459,9 @@ update_debug_records(DebugState *debug_state)
    
 }
 
+
 INTERNAL void
-debug_overlay(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_state)
+debug_overlay_snapshots(BackBuffer *back_buffer, MonospaceFont *font, DebugState *debug_state)
 {
   for (u32 debug_counter = 0;
        debug_counter < debug_state->counter_count;
@@ -555,10 +556,26 @@ debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
   u32 event_count = debug_event_index; 
   debug_event_index = 0;   
 
+  global_debug_table->current_event_array_index++;
+  // IMPORTANT(Ryan): The size of the array determines how many frames of data we collect 
+  // Now, we don't need the snapshots
+  if (global_debug_table->current_event_array_index >= MAX_DEBUG_EVENT_COUNT)
+  {
+    global_debug_table->current_event_array_index = 0;
+  }
+
+  global_debug_table->frame_event_count[current_event_array_index] = global_event_count;
+
   DebugState *debug_state = (DebugState *)memory->debug_memory;
   // allows setting to 0 for debug builds
   if (debug_state != NULL)
   {
+    if (!debug_state->is_initialised)
+    {
+      debug_state->is_initialised = true;
+    }
+    
+    // collate_debug_records(debug_state, current_event_array_index); below
     debug_state->counter_count = 0;
 
 #if 0
@@ -605,6 +622,91 @@ debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
     if (debug_state->snapshot_index >= DEBUG_SNAPSHOT_MAX_COUNT)
     {
       debug_state->snapshot_index = 0;
+    }
+  }
+}
+
+INTERNAL void
+collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
+{
+  debug_state->frames = PUSH_ARRAY(debug_state->arena, MAX_DEBUG_EVENT_ARRAY_COUNT * 4, DebugFrame);
+
+  DebugFrame *current_frame = NULL;
+
+  // IMPORTANT(Ryan): Visit in temporal order, i.e. oldest to most recent
+  for (u32 event_array_i = most_recent_event_index + 1;
+       event_array_i != most_recent_event_index;
+       ++event_array_i)
+  {
+    if (event_array_i == MAX_DEBUG_EVENT_ARRAY_COUNT)
+    {
+      event_array_i = 0;
+    }
+
+    for (u32 event_i = 0;
+         event_i < MAX_DEBUG_EVENT_COUNT;
+         ++event_i)
+    {
+      DebugEvent *debug_event = global_debug_table->events[event_array_i] + event_i;
+
+      DebugRecord *source = global_debug_table->records + debug_event->record_index;
+
+      if (debug_event->type == DEBUG_EVENT_FRAME_MARKER)
+      {
+        if (current_frame != NULL)
+        {
+          current_frame->end_clock = event->clock;
+        }
+
+        current_frame = debug_state->frames + debug_state->frame_count;
+        current_frame->begin_clock = event->clock;
+        current_frame->end_clock = 0;
+        current_frame->region_count = 0;
+        // TODO(Ryan): reset memory arena to make it 'temporary'
+        current_frame->regions = PUSH_ARRAY(debug_state->arena, MAX_DEBUG_RECORD_COUNT, 
+                                                 DebugFrameRegion);
+        debug_state->frame_count++;
+      }
+      else
+      {
+        if (current_frame != NULL)
+        {
+          u64 relative_clock = debug_event->clock - current_frame->begin_clock;
+
+          if (debug_event->type == DEBUG_EVENT_FRAME_MARKER)
+          {
+
+          }
+          else if (debug_event->type == DEBUG_EVENT_FRAME_MARKER)
+          {
+
+          }
+          else
+          {
+            ASSERT(!"Invalid event type");
+          }
+        }
+      }
+
+    }
+  }
+}
+
+INTERNAL void
+new_debug_overlay()
+{
+  r32 scale = debug_state->frame_bar_scale;
+  for (u32 frame_index = 0;
+       frame_index < debug_state->frame_count;
+       ++frame_index)
+  {
+    DebugFrame *debug_frame = debug_state->frames + frame_index;
+    for (u32 region_index = 0;
+        region_index < debug_state->region_count;
+        ++region_index)
+    {
+      DebugRegion *debug_region = debug_frame->regions + region_index;
+      r32 this_min_y = scale * debug_region->min_t;
     }
   }
 }

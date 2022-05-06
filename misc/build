@@ -19,7 +19,7 @@ common_flags="-DGUI_LINUX $ignored_warning_flags -Icode -fno-exceptions -fno-rtt
 
 ctime -begin misc/gui.ctm
 
-g++ $common_flags $dev_type_flags \
+g++ -DTRANSLATION_UNIT=0 $common_flags $dev_type_flags \
   code/sdl2-platform.cpp -o build/gui \
   -lm -lSDL2
 
@@ -32,7 +32,7 @@ else
   echo 1 > build/toggle.file
 fi
 
-g++ $common_flags $dev_type_flags \
+g++ -DTRANSLATION_UNIT=1 $common_flags $dev_type_flags \
   -fPIC code/gui.cpp -shared -o run/"$toggle_name" \
   -lm
 

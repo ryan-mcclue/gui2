@@ -36,7 +36,7 @@
 struct DebugRecord
 {
   const char *file_name;
-  const char *function_name;
+  const char *block_name;
   u32 line_number;
   u64 cycle_count;
   u32 hit_count;
@@ -44,6 +44,9 @@ struct DebugRecord
 
 extern DebugRecord debug_records[];
 
+// TODO(Ryan): Look in handmade_platform.h (day183) for macro definitions
+
+// TIMED_FUNCTION() instead so don't have to provide name
 #define TIMED_BLOCK__(line_number, ...) \
   TimedBlock timed_block##line_number(__COUNTER__, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
@@ -99,11 +102,17 @@ struct TimedBlock
   }
 };
 
+#define BEGIN_BLOCK_()
+
+#define BEGIN_BLOCK(name) \
+
+#define END_BLOCK()
 
 enum DEBUG_EVENT_TYPE
 {
   DEBUG_EVENT_BEGIN_BLOCK,
-  DEBUG_EVENT_END_BLOCK
+  DEBUG_EVENT_END_BLOCK,
+  DEBUG_EVENT_FRAME_MARKER,
 };
 // this is for logging, so size is of more concern?
 struct DebugEvent
@@ -146,18 +155,35 @@ struct DebugCounterSnapshot
 struct DebugCounterState
 {
   const char *file_name;
-  const char *function_name;
+  const char *block_name;
   u32 line_number;
 
   DebugCounterSnapshot snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
 };
 
+struct DebugFrameRegion
+{
+  r32 min_t, max_t;
+};
+
+struct DebugFrame
+{
+  u64 begin_clock, end_clock;
+  u32 region_count;
+  DebugRegion *regions;
+};
+
 // DebugHistory
 struct DebugState
 {
-  u32 counter_count;
-  u32 snapshot_index;
-  DebugCounterState counter_states[512];
+  b32 is_initialised;
+
+  u32 frame_count;
+  //u32 counter_count;
+  //u32 snapshot_index;
+  //DebugCounterState counter_states[512];
+
+  DebugFrames *frames;
 
   // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
 
@@ -211,14 +237,20 @@ update_debug_statistic(DebugStatistic *debug_statistic, r64 value)
 
 // DebugInformation
 #define MAX_DEBUG_TRANSLATION_UNITS 2
+#define MAX_DEBUG_EVENT_ARRAY_COUNT 64
 struct DebugTable
 {
-  DebugEvent debug_events[MAX_DEBUG_EVENT_COUNT];
+  DebugEvent debug_events[MAX_DEBUG_EVENT_ARRAY_COUNT][MAX_DEBUG_EVENT_COUNT];
+  u32 event_count[MAX_DEBUG_EVENT_ARRAY_COUNT];
+
+  u32 record_count;
   DebugRecords debug_records[MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_RECORD_COUNT];
 };
 
-// defined in platform?
-extern GLOBAL DebugTable global_debug_table;
+// don't export this
+GLOBAL DebugTable global_debug_table_;
+// export this to the platform layer
+DebugTable *global_debug_table = &global_debug_table_;
 
 // end of timer usage
 #define DEBUG_RECORDS_COUNT __COUNTER__

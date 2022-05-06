@@ -253,7 +253,10 @@ main(int argc, char *argv[])
               bool want_to_run = true;
               while (want_to_run)
               {
+                // FRAME_MARKER();
+                
                 SDL_Event event = {};
+                // BEGIN_BLOCK(EventProcessing);
                 while (SDL_PollEvent(&event))
                 {
                   if (event.type == SDL_QUIT)
@@ -261,6 +264,7 @@ main(int argc, char *argv[])
                     want_to_run = false;
                   }
                 }
+                // END_BLOCK();
 
                 debug_info.events_processed = get_elapsed_seconds(last_counter, 
                                                                   SDL_GetPerformanceCounter());
@@ -294,6 +298,7 @@ main(int argc, char *argv[])
 
                 // if (game_functions->debug_frame_end)
                 // {
+                // IMPORTANT(Ryan): No longer need this, as store in globals
                 // game_functions->debug_frame_end(&memory, &debug_info)
                 // };
               }
