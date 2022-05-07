@@ -630,10 +630,20 @@ debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
   }
 }
 
+INTERNAL DebugFrameRegion *
+add_region(DebugState *debug_state, DebugFrame *current_frame)
+{
+  ASSERT(current_frame->region_count < MAX_DEBUG_REGIONS_PER_FRAME);
+  DebugFrameRegion *result = current_frame->regions + current_frame->region_count;
+
+  return result;
+}
+
 INTERNAL void
 collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
 {
   debug_state->frames = PUSH_ARRAY(debug_state->arena, MAX_DEBUG_EVENT_ARRAY_COUNT * 4, DebugFrame);
+  debug_state->frame_bar_scale = 1.0f;
 
   DebugFrame *current_frame = NULL;
 
@@ -660,6 +670,16 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
         if (current_frame != NULL)
         {
           current_frame->end_clock = event->clock;
+          r32 clock_range = (r32)(current_frame->end_clock - current_frame->begin_clock);
+          if (clock_range > 0.0f)
+          {
+            r32 frame_bar_scale = 1.0f / clock_range;
+            // store largest clock_range value 
+            if (debug_state->frame_bar_scale > frame_bar_scale)
+            {
+              debug_state->frame_bar_scale = frame_bar_scale;
+            }
+          }
         }
 
         current_frame = debug_state->frames + debug_state->frame_count;
@@ -667,7 +687,7 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
         current_frame->end_clock = 0;
         current_frame->region_count = 0;
         // TODO(Ryan): reset memory arena to make it 'temporary'
-        current_frame->regions = PUSH_ARRAY(debug_state->arena, 256, 
+        current_frame->regions = PUSH_ARRAY(debug_state->arena, MAX_REGIONS_PER_FRAME, 
                                                  DebugFrameRegion);
         debug_state->frame_count++;
       }
@@ -697,6 +717,7 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
           }
           else if (debug_event->type == DEBUG_EVENT_END_BLOCK)
           {
+            // TODO(Ryan): Want a tree structure to store hierarchy
             for (u32 past_block_i = num_blocks - 1;
                  past_block_i >= 0;
                  past_block--)
@@ -705,9 +726,20 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
               if (opening_event->type == DEBUG_EVENT_OPEN_BLOCK)
               {
                 // matching open block found 
-                DebugFrameRegion *region = add_region(debug_state, current_frame); 
-                region->min_t = (r32)(opening_event->clock - current_frame->begin_clock);
-                region->max_t = (r32)(debug_event->clock - current_frame->begin_clock);
+                if (opening_eventing_debug_block->parent == NULL)
+                {
+                  // we draw from regions
+                  r32 min_t = (r32)(opening_event->clock - current_frame->begin_clock);
+                  r32 max_t = (r32)(debug_event->clock - current_frame->begin_clock);
+                  r32 threshold = 0.01f;
+                  // only draw if visible, i.e. more than 1 100th of a bar
+                  if (max_t - min_t > threshold_t)
+                  {
+                    DebugFrameRegion *region = add_region(debug_state, current_frame); 
+                    region->min_t = min_t;
+                    region->max_t = max_t;
+                  }
+                }
               }
             }
                  
@@ -737,7 +769,8 @@ new_debug_overlay()
         ++region_index)
     {
       DebugRegion *debug_region = debug_frame->regions + region_index;
-      r32 this_min_y = scale * debug_region->min_t;
+      r32 this_min_y = some_y + scale * debug_region->min_t * chart_height;
+      r32 this_max_y = some_y + scale * debug_region->max_t * chart_height;
     }
   }
 }

@@ -161,8 +161,10 @@ struct DebugCounterState
   DebugCounterSnapshot snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
 };
 
+// this is just between a start and end block?
 struct DebugFrameRegion
 {
+  // these values are with respect to cycle count?
   r32 min_t, max_t;
 };
 
@@ -182,12 +184,12 @@ struct DebugState
   //u32 counter_count;
   //u32 snapshot_index;
   //DebugCounterState counter_states[512];
+  r32 frame_bar_scale;
 
   DebugFrames *frames;
 
-  DebugOpenBlock *first_block;
-
-  DebugOpenBlock *first_free_block;
+  // this is for tracking hierarchical information
+  DebugBlock *blocks;
   // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
   // TODO(Ryan): Include layout/font information
 };
@@ -236,6 +238,7 @@ update_debug_statistic(DebugStatistic *debug_statistic, r64 value)
   debug_statistic->avg += value;
 }
 
+#define MAX_REGIONS_PER_FRAME 256
 
 // DebugInformation
 #define MAX_DEBUG_TRANSLATION_UNITS 2
@@ -257,10 +260,9 @@ DebugTable *global_debug_table = &global_debug_table_;
 // end of timer usage
 #define DEBUG_RECORDS_COUNT __COUNTER__
 
-struct OpenDebugBlock
+struct DebugBlock
 {
+  u32 frame_index;
   DebugEvent *opening_event;
-  OpenDebugBlock *parent;
-
-  OpenDebugBlock *next_free;
+  DebugBlock *parent;
 };
