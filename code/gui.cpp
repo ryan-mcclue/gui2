@@ -575,7 +575,11 @@ debug_frame_end(Memory *memory, PlatformDebugInfo *platform_debug_info)
       debug_state->is_initialised = true;
     }
     
-    // collate_debug_records(debug_state, current_event_array_index); below
+    begin_temporary_memory(debug_state->arena);
+
+    debug_state->first_free_block = NULL;
+    // collate_debug_records(debug_state, current_event_array_index);
+    end_temporary_memory(debug_state->arena);
     debug_state->counter_count = 0;
 
 #if 0
@@ -644,7 +648,7 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
     }
 
     for (u32 event_i = 0;
-         event_i < MAX_DEBUG_EVENT_COUNT;
+         event_i < global_debug_table->event_count[event_array_i];
          ++event_i)
     {
       DebugEvent *debug_event = global_debug_table->events[event_array_i] + event_i;
@@ -663,7 +667,7 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
         current_frame->end_clock = 0;
         current_frame->region_count = 0;
         // TODO(Ryan): reset memory arena to make it 'temporary'
-        current_frame->regions = PUSH_ARRAY(debug_state->arena, MAX_DEBUG_RECORD_COUNT, 
+        current_frame->regions = PUSH_ARRAY(debug_state->arena, 256, 
                                                  DebugFrameRegion);
         debug_state->frame_count++;
       }
@@ -671,15 +675,42 @@ collate_debug_records(DebugState *debug_state, u32 most_recent_event_index)
       {
         if (current_frame != NULL)
         {
+          OpenDebugBlock *block = get_debug_block(debug_state);
+
           u64 relative_clock = debug_event->clock - current_frame->begin_clock;
 
-          if (debug_event->type == DEBUG_EVENT_FRAME_MARKER)
+          if (debug_event->type == DEBUG_EVENT_BEGIN_BLOCK)
           {
+            OpenDebugBlock *debug_block = debug_state->first_free_block;
+            if (debug_block != NULL)
+            {
+              debug_block = debug_block->next_free; 
+            }
+            else
+            {
+              debug_block = PUSH_STRUCT(debug_state->arena, OpenDebugBlock); 
+            }
 
+            debug_block->opening_event = debug_event; 
+            debug_block->parent = debug_state->first_free_block;
+            debug_state->first_free_block = debug_block;
           }
-          else if (debug_event->type == DEBUG_EVENT_FRAME_MARKER)
+          else if (debug_event->type == DEBUG_EVENT_END_BLOCK)
           {
-
+            for (u32 past_block_i = num_blocks - 1;
+                 past_block_i >= 0;
+                 past_block--)
+            {
+              DebugEvent *opening_event = debug_state->blocks[past_block_i]->event;
+              if (opening_event->type == DEBUG_EVENT_OPEN_BLOCK)
+              {
+                // matching open block found 
+                DebugFrameRegion *region = add_region(debug_state, current_frame); 
+                region->min_t = (r32)(opening_event->clock - current_frame->begin_clock);
+                region->max_t = (r32)(debug_event->clock - current_frame->begin_clock);
+              }
+            }
+                 
           }
           else
           {

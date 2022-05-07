@@ -185,8 +185,10 @@ struct DebugState
 
   DebugFrames *frames;
 
-  // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
+  DebugOpenBlock *first_block;
 
+  DebugOpenBlock *first_free_block;
+  // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
   // TODO(Ryan): Include layout/font information
 };
 
@@ -254,3 +256,11 @@ DebugTable *global_debug_table = &global_debug_table_;
 
 // end of timer usage
 #define DEBUG_RECORDS_COUNT __COUNTER__
+
+struct OpenDebugBlock
+{
+  DebugEvent *opening_event;
+  OpenDebugBlock *parent;
+
+  OpenDebugBlock *next_free;
+};
