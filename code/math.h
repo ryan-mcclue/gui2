@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 #pragma once
 
+#include "types.h"
 // TODO(Ryan): For some reason, #include <math.h> does not declare math functions?
-#include <cmath>
 #include <float.h>
+#include <math.h>
 
 // TODO(Ryan): Investigate using gcc extensions for safer macros.
 // Do they add any overhead?

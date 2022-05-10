@@ -5,7 +5,7 @@
 
 #if defined(GUI_INTERNAL)
   INTERNAL void __bp(char const *file_name, char const *func_name, int line_num,
-                     char const *optional_message = "")
+                     char const *optional_message)
   { 
     fprintf(stderr, "BREAKPOINT TRIGGERED! (%s:%s:%d)\n\"%s\"\n", file_name, func_name, 
             line_num, optional_message);
@@ -23,7 +23,7 @@
 #endif
   }
   #define BP_MSG(msg) __bp(__FILE__, __func__, __LINE__, msg)
-  #define BP() __bp(__FILE__, __func__, __LINE__)
+  #define BP() __bp(__FILE__, __func__, __LINE__, "")
   #define EBP() __ebp(__FILE__, __func__, __LINE__)
   #define ASSERT(cond) if (!(cond)) {BP();}
 #else
@@ -33,16 +33,34 @@
   #define ASSERT(cond)
 #endif
 
-struct DebugRecord
+#if 0
+struct DebugBlockStaticInfo
 {
   const char *file_name;
   const char *block_name;
   u32 line_number;
-  u64 cycle_count;
-  u32 hit_count;
 };
+extern DebugBlockStaticInfo global_debug_block_static_infos[];
 
-extern DebugRecord debug_records[];
+enum DEBUG_EVENT_TYPE
+{
+  DEBUG_EVENT_BEGIN_BLOCK,
+  DEBUG_EVENT_END_BLOCK,
+  DEBUG_EVENT_FRAME_MARKER,
+};
+struct DebugEvent
+{
+  u64 clock;
+  u16 static_info_index;
+  DEBUG_EVENT_TYPE type;
+};
+struct DebugEventTable
+{
+  DebugEvent per_frame_events[][];
+  u32 per_frame_event_index;
+  u32 per_frame_event_count[];
+  u32 frame_index;
+};
 
 // TODO(Ryan): Look in handmade_platform.h (day183) for macro definitions
 
@@ -58,32 +76,33 @@ extern DebugRecord debug_records[];
 
 struct TimedBlock
 {
-  DebugRecord *debug_record;
-  u64 start_cycle_count;
   u32 counter;
 
-  TimedBlock(u32 counter_init, const char *file_name, u32 line_number, const char *function_name, 
-             u32 hit_count_increment = 1)
+  TimedBlock(u32 counter_init, const char *file_name, u32 line_number, const char *block_name)
   {
-    start_cycle_count = __rdtsc();
-
     counter = counter_init;
 
-    debug_record = debug_records + counter;
-    debug_record->file_name = file_name;
-    debug_record->function_name = function_name;
-    debug_record->line_number = line_number;
-    debug_record->hit_count += hit_count_increment;
+    DebugBlockStaticInfo *block_static_info = global_debug_block_static_infos + counter;
+    block_static_info->file_name = file_name;
+    block_static_info->function_name = function_name;
+    block_static_info->line_number = line_number;
 
-    // Logging approach below?
-    // so now we record everything that happened that frame
-    u32 event_index = debug_event_index++;
+    u32 event_index = global_debug_event_table->per_frame_event_index++;
     ASSERT(event_index < MAX_EVENT_DEBUG_COUNT);
-    DebugEvent *event = debug_event_array + event_index;
+
+    u32 frame_index = global_debug_event_table->frame_index++;
+    DebugEvent *event = global_debug_event_table->per_frame_ + event_index;
     event->clock = __rdtsc();
     event->debug_record_index = (u16)counter;
     event->debug_record_array_index = 0;
     event->type = DEBUG_EVENT_BEGIN_BLOCK;
+
+    if (frame_index >= MAX_DEBUG_FRAME_COUNT)
+    {
+      global_debug_event_table->frame_index = 0;
+    }
+
+    // at end we set event count etc.
   }
 
   ~TimedBlock()
@@ -102,69 +121,27 @@ struct TimedBlock
   }
 };
 
+#if defined(INTERNAL)
 #define BEGIN_BLOCK_()
-
-#define BEGIN_BLOCK(name) \
-
+#define BEGIN_BLOCK()
 #define END_BLOCK()
+#else
+#define TIMED_BLOCK()
+#define TIMED_FUNCTION()
+#define BEGIN_BLOCK()
+#define END_BLOCK()
+#endif
 
-enum DEBUG_EVENT_TYPE
-{
-  DEBUG_EVENT_BEGIN_BLOCK,
-  DEBUG_EVENT_END_BLOCK,
-  DEBUG_EVENT_FRAME_MARKER,
-};
-// this is for logging, so size is of more concern?
-struct DebugEvent
-{
-  u64 clock;
-  // u16 core_index;
-  // u16 thread_index;
-  u16 debug_record_index;
-  // TODO(Ryan): This is only required for HH multiple builds?...
-  u16 debug_record_array_index;
-  u8 type;
-};
-// IMPORTANT(Ryan): If doing multithreading, probably have some double-buffering scheme,
-// whereby one buffer is where writing to and then other is for reading
+#define MAX_REGIONS_PER_FRAME 256
+#define DEBUG_FRAME_COUNT 8
+#define MAX_DEBUG_TRANSLATION_UNITS 2
+#define MAX_DEBUG_EVENT_ARRAY_COUNT 64
+
 #define MAX_EVENT_DEBUG_COUNT 65536
 extern DebugEvent debug_event_array[MAX_EVENT_DEBUG_COUNT];
-extern u32 debug_event_index; // where we are trying to write to
 
-struct DebugTimer
-{
-  const char *name;
-  r32 seconds_snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
-};
-
-// could change this to RootDebugInfo 
-struct PlatformDebugInfo
-{
-  u32 timer_count;
-  r32 total_seconds;
-  DebugTimer debug_timers[64];
-};
-
-struct DebugCounterSnapshot
-{
-  u64 cycle_count;
-  u32 hit_count;
-};
-
-#define DEBUG_SNAPSHOT_MAX_COUNT 120
-struct DebugCounterState
-{
-  const char *file_name;
-  const char *block_name;
-  u32 line_number;
-
-  DebugCounterSnapshot snapshots[DEBUG_SNAPSHOT_MAX_COUNT];
-};
-
-// this is just between a start and end block?
 struct DebugFrameRegion
 {
-  // these values are with respect to cycle count?
   r32 min_t, max_t;
 };
 
@@ -178,91 +155,20 @@ struct DebugFrame
 // DebugHistory
 struct DebugState
 {
-  b32 is_initialised;
+  b32 is_initialised, is_paused;
 
-  u32 frame_count;
-  //u32 counter_count;
-  //u32 snapshot_index;
-  //DebugCounterState counter_states[512];
   r32 frame_bar_scale;
-
   DebugFrames *frames;
 
   // this is for tracking hierarchical information
-  DebugBlock *blocks;
-  // PlatformDebugTimers platform_timers[DEBUG_SNAPSHOT_MAX_COUNT];
+  DebugBlockNode *blocks;
   // TODO(Ryan): Include layout/font information
 };
 
-struct DebugStatistic
-{
-  r64 min, max, avg;
-  u32 count; 
-};
-INTERNAL DebugStatistic
-begin_debug_statistic(void)
-{
-  DebugStatistic result = {};
-  
-  result.min = R32_MAX;
-  result.max = R32_MIN;
-  result.avg = 0.0f;
-
-  return result;
-}
-INTERNAL void
-end_debug_statistic(DebugStatistic *debug_statistic)
-{
-  if (debug_statistic->count != 0)
-  {
-    debug_statistic->avg /= debug_statistic->count;
-  }
-  else
-  {
-    debug_statistic->min = debug_statistic->max = 0.0f;
-  }
-}
-INTERNAL void
-update_debug_statistic(DebugStatistic *debug_statistic, r64 value)
-{
-  debug_statistic->count++;
-
-  if (value < debug_statistic->min)
-  {
-    debug_statistic->min = value;
-  }
-  if (value > debug_statistic->max)
-  {
-    debug_statistic->max = value;
-  }
-  debug_statistic->avg += value;
-}
-
-#define MAX_REGIONS_PER_FRAME 256
-
-// DebugInformation
-#define MAX_DEBUG_TRANSLATION_UNITS 2
-#define MAX_DEBUG_EVENT_ARRAY_COUNT 64
-struct DebugTable
-{
-  DebugEvent debug_events[MAX_DEBUG_EVENT_ARRAY_COUNT][MAX_DEBUG_EVENT_COUNT];
-  u32 event_count[MAX_DEBUG_EVENT_ARRAY_COUNT];
-
-  u32 record_count;
-  DebugRecords debug_records[MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_RECORD_COUNT];
-};
-
-// don't export this
-GLOBAL DebugTable global_debug_table_;
-// export this to the platform layer
-DebugTable *global_debug_table = &global_debug_table_;
-
-// end of timer usage
-#define DEBUG_RECORDS_COUNT __COUNTER__
-
-struct DebugBlock
+struct DebugBlockNode
 {
   u32 frame_index;
   DebugEvent *opening_event;
   DebugBlock *parent;
 };
+#endif

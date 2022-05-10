@@ -1,53 +1,23 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 
-struct BackBuffer
+typedef struct DigitalButton
 {
-  V2u dim;
-  u32 *pixels;
-};
+  b32 is_down, was_down;
+} DigitalButton;
 
-struct DigitalButton
-{
-  bool is_down, was_down;
-};
-
-struct Input
+typedef struct Input
 {
   s32 mouse_x, mouse_y;
   DigitalButton mouse_left, mouse_right, mouse_middle;
 
   r32 update_dt;
-};
+} Input;
 
-struct Memory
+typedef struct Memory
 {
   u64 size;
   void *mem;
+} Memory;
 
-  u64 debug_size;
-  void *debug_memory;
-};
-
-struct ReadFileResult
-{
-  u64 file_size;
-  void *mem;
-};
-
-struct DebugFrameEndInfo
-{
-  r32 events_processed; 
-  r32 end_of_frame; 
-};
-
-typedef ReadFileResult (*ReadEntireFile)(const char *file_name);
-typedef void (*FreeFileResult)(ReadFileResult *read_file_result);
-struct Functions
-{
-  ReadEntireFile read_entire_file;
-  FreeFileResult free_file_result;
-};
-
-typedef void (*UpdateAndRender)(BackBuffer *, Input *, Memory *, Functions *);
-extern "C" void
-update_and_render(BackBuffer *back_buffer, Input *input, Memory *memory, Functions *functions);
+typedef void (*UpdateAndRender)(SDL_Renderer *, Input *, Memory *);
+void update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory);

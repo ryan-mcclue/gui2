@@ -23,6 +23,8 @@ typedef int64_t  s64;
 typedef float r32;
 typedef double r64;
 typedef u32 b32;
+#define true 1
+#define false 0
 
 #define R32_MAX FLT_MAX
 #define R32_MIN -FLT_MAX

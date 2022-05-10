@@ -12,15 +12,15 @@ dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
 # IMPORTANT(Ryan): Are we fine with breaking IEEE floating point (losing precision) for speed?
 #dev_type_flags="-O3 -DGUI_FAST -DGUI_EXTERNAL -ffast-math"
 
-common_flags="-DGUI_LINUX $ignored_warning_flags -Icode -fno-exceptions -fno-rtti -std=gnu++17
+common_flags="-DGUI_LINUX $ignored_warning_flags -Icode -std=gnu11
   -Werror -Wall -Wextra -pedantic -Warray-bounds=2 
   -march=native"
   #-ffunction-sections -fdata-sections -Wl,--gc-sections"
 
 ctime -begin misc/gui.ctm
 
-g++ -DTRANSLATION_UNIT=0 $common_flags $dev_type_flags \
-  code/sdl2-platform.cpp -o build/gui \
+gcc $common_flags $dev_type_flags \
+  code/platform.c -o build/gui \
   -lm -lSDL2
 
 read -r -n 1 build_toggle < build/toggle.file
@@ -32,9 +32,9 @@ else
   echo 1 > build/toggle.file
 fi
 
-g++ -DTRANSLATION_UNIT=1 $common_flags $dev_type_flags \
-  -fPIC code/gui.cpp -shared -o run/"$toggle_name" \
-  -lm
+gcc $common_flags $dev_type_flags \
+  -fPIC code/gui.c -shared -o run/"$toggle_name" \
+  -lm -lSDL2
 
 ctime -end misc/gui.ctm
 
