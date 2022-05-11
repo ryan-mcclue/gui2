@@ -18,6 +18,7 @@ typedef union V2
   };
   r32 e[2];
 } V2;
+
 INTERNAL V2
 v2(r32 x, r32 y)
 {
@@ -25,6 +26,55 @@ v2(r32 x, r32 y)
 
   result.x = x;
   result.y = y;
+
+  return result;
+}
+
+INTERNAL r32
+vec_dot(V2 vec1, V2 vec2)
+{
+  r32 result = 0.0f;
+
+  result = (vec1.x * vec2.x) + (vec1.y * vec2.y);
+
+  return result;
+}
+
+INTERNAL r32
+vec_length_sq(V2 vec)
+{
+  r32 result = 0.0f;
+
+  result = vec_dot(vec, vec);
+
+  return result;
+}
+
+INTERNAL r32
+vec_length(V2 vec)
+{
+  r32 result = 0.0f;
+
+  result = square_root(vec_length_sq(vec));
+
+  return result;
+}
+
+INTERNAL V2
+vec_norm(V2 vec)
+{
+  V2 result = {vec.vec * (1.0f / vec_length(vec))};
+
+  return result;
+}
+
+INTERNAL V2
+vec_perp(V2 vec)
+{
+  V2 result = {0};
+
+  result.x = -vec.y;
+  result.y = vec.x;
 
   return result;
 }

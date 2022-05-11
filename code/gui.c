@@ -101,13 +101,42 @@ draw_rect_on_axis(SDL_Renderer *renderer, V2 origin, V2 x_axis, V2 y_axis, V4 co
   SDL_RenderGeometry(renderer, NULL, vertices, 6, NULL, 0);
 }
 
-#if 0
-void
-load_font()
+typedef struct Glyph
 {
+  SDL_Texture *glyph;
+} Glyph;
 
+typedef struct Font
+{
+  Glyph glyphs[256]; 
+} Font;
+
+INTERNAL Font
+load_font(const char *font_name)
+{
+  Font result = {0};
+
+  TTF_Font *ttf_font = TTF_OpenFont(font_name, 24);
+  if (ttf_font != NULL)
+  {
+    for (char ch = 0; ch < ; ++ch)
+    {
+      SDL_Surface *glyph_surface = TTF_RenderText_Solid(ttf_font, text, colour);
+      SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+      SDL_FreeSurface(surface);
+    }
+  }
+  else
+  {
+    BP_MSG(TTF_GetError());
+  }
+
+  TTF_CloseFont(ttf_font);
+
+  return result;
 }
 
+#if 0
 void
 draw_text(TTF_Font *font, const char *text, r32 scale, V4 colour)
 {
@@ -121,12 +150,8 @@ draw_text(TTF_Font *font, const char *text, r32 scale, V4 colour)
 
   SDL_Colour sdl_colour = v4_to_sdl_colour(colour);
 
-  SDL_Surface *text_surface = TTF_RenderText_Solid(font, text, colour);
-
-  SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
 
   SDL_DestroyTexture(texture);
-  SDL_FreeSurface(surface);
 
   int texW = 0;
   int texH = 0;
@@ -149,11 +174,6 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
 
-    state->font = TTF_OpenFont("ENDORALT.ttf", 24);
-    if (state->font == NULL)
-    {
-      BP_MSG(TTF_GetError());
-    }
 
     state->is_initialised = true;
   }
@@ -168,18 +188,30 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     state->time += input->update_dt;
   }
 
-  V2 pos = v2(100, 100);
-  V2 dim = v2(300, 300);
-  V4 colour = v4(1, 0, 1, 1);
-  //draw_rect(renderer, pos, dim, colour);
+  V2 block1_pos = v2(100, 100);
+  V2 block1_dim = v2(100, 100);
+  V4 block1_colour = v4(1, 0, 1, 1);
+  draw_rect(renderer, block1_pos, block1_dim, block1_colour);
 
-  V2 origin = v2(400, 300);
-  r32 scale = 150.0f;
-  V2 x_axis = v2(scale * cosine(state->time), scale * sine(state->time));
-  V2 y_axis = v2(scale * -sine(state->time), scale * cosine(state->time));
-  //V2 x_axis = v2(scale * 1.0f, 0.0f);
-  //V2 y_axis = v2(0.0f, scale * 1.0f);
-  draw_rect_on_axis(renderer, origin, x_axis, y_axis, colour);
+  V2 block2_pos = v2(200, 300);
+  V2 block2_dim = v2(100, 100);
+  V4 block2_colour = v4(0, 0, 1, 1);
+  draw_rect(renderer, block2_pos, block2_dim, block2_colour);
+
+  V2 line_origin = v2(block1_pos.x + 0.5f * block1_dim.w,
+                      block1_pos.y + block1_dim.h);
+  V2 line_end = v2(block2_pos.x + 0.5f * block2_dim.w, block2_pos.y); 
+  V2 line_x_axis = {line_end.vec - line_origin.vec};
+  V2 line_y_axis = {3.0f * vec_norm(vec_perp(line_x_axis)).vec};
+  V4 line_colour = v4(1, 1, 1, 1);
+  draw_rect_on_axis(renderer, line_origin, line_x_axis, line_y_axis, line_colour);
+
+  //r32 scale = 150.0f;
+  //V2 x_axis = v2(scale * cosine(state->time), scale * sine(state->time));
+  //V2 y_axis = v2(scale * -sine(state->time), scale * cosine(state->time));
+  ////V2 x_axis = v2(scale * 1.0f, 0.0f);
+  ////V2 y_axis = v2(0.0f, scale * 1.0f);
+  //draw_rect_on_axis(renderer, origin, x_axis, y_axis, colour);
 
   // square_orbits();
 
