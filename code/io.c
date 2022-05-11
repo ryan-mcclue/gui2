@@ -12,7 +12,7 @@ free_file_result(ReadFileResult *read_file_result)
 INTERNAL ReadFileResult
 read_entire_file(const char *file_name)
 {
-  ReadFileResult result = {};
+  ReadFileResult result = {0};
 
   SDL_RWops *rw_ops = SDL_RWFromFile(file_name, "rb");  
   if (rw_ops != NULL)
@@ -59,7 +59,7 @@ get_file_modification_time(const char *file_name)
   u64 result = 0;
 
 #if defined(GUI_LINUX)
-  struct stat file_stat = {};
+  struct stat file_stat = {0};
   if (stat(file_name, &file_stat) == 0)
   {
     result = file_stat.st_mtim.tv_sec;

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 #pragma once
 
-#include "types.h"
-// TODO(Ryan): For some reason, #include <math.h> does not declare math functions?
 #include <float.h>
 #include <math.h>
 
@@ -17,6 +15,14 @@
   (sizeof(arr) / sizeof((arr)[0]))
 
 // TODO(Ryan): Investigate replacing CRT with SIMD instructions
+
+// TODO(Ryan): For some reason, #include <math.h> does not declare math functions?
+r32 roundf(r32);
+r32 ceilf(r32);
+r32 floorf(r32);
+r32 sqrtf(r32);
+r32 cosf(r32);
+r32 sinf(r32);
 
 INTERNAL u32
 round_r32_to_u32(r32 real32)

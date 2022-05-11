@@ -8,7 +8,16 @@ typedef struct DigitalButton
 typedef struct Input
 {
   s32 mouse_x, mouse_y;
-  DigitalButton mouse_left, mouse_right, mouse_middle;
+  union
+  {
+    struct
+    {
+      DigitalButton mouse_left;
+      DigitalButton mouse_right; 
+      DigitalButton mouse_middle;
+    };
+    DigitalButton buttons[3];
+  };
 
   r32 update_dt;
 } Input;

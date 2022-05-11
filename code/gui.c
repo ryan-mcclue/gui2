@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: zlib-acknowledgement
-#include <SDL2/SDL.h>
+#include "SDL.h"
+#include <SDL2/SDL_ttf.h>
 
 #include "types.h"
 #include "debug.h"
-//#include "math.h"
+#include "math.h"
 #include "vector.h"
 #include "platform.h"
 
 #include "gui.h"
-
 
 INTERNAL MemArena
 create_mem_arena(void *mem, u64 size)
@@ -68,30 +68,72 @@ draw_rect(SDL_Renderer *renderer, V2 pos, V2 dim, V4 colour)
   SDL_RenderFillRect(renderer, &render_rect);
 }
 
-#if 0
 INTERNAL void
 draw_rect_on_axis(SDL_Renderer *renderer, V2 origin, V2 x_axis, V2 y_axis, V4 colour)
 {
   SDL_Colour sdl2_colour = v4_to_sdl_colour(colour);
 
-  SDL_Vertex vertices[4] = {0};
+  SDL_Vertex vertices[6] = {0};
   vertices[0].position.x = origin.x;
   vertices[0].position.y = origin.y;
-  vertices[0].colour = sdl2_colour;
+  vertices[0].color = sdl2_colour;
 
   vertices[1].position.x = origin.x + x_axis.x;
   vertices[1].position.y = origin.y + x_axis.y;
-  vertices[1].colour = sdl2_colour;
+  vertices[1].color = sdl2_colour;
 
-  vertices[2].position.x = origin.x + x_axis.x + y_axis.x;
-  vertices[2].position.y = origin.y + x_axis.y + y_axis.y;
-  vertices[2].colour = sdl2_colour;
+  vertices[2].position.x = origin.x + y_axis.x;
+  vertices[2].position.y = origin.y + y_axis.y;
+  vertices[2].color = sdl2_colour;
 
   vertices[3].position.x = origin.x + y_axis.x;
   vertices[3].position.y = origin.y + y_axis.y;
-  vertices[3].colour = sdl2_colour;
+  vertices[3].color = sdl2_colour;
 
-  SDL_RenderGeometry(renderer, NULL, vertices, 4, NULL, 0);
+  vertices[4].position.x = origin.x + x_axis.x + y_axis.x;
+  vertices[4].position.y = origin.y + x_axis.y + y_axis.y;
+  vertices[4].color = sdl2_colour;
+
+  vertices[5].position.x = origin.x + x_axis.x;
+  vertices[5].position.y = origin.y + x_axis.y;
+  vertices[5].color = sdl2_colour;
+
+  SDL_RenderGeometry(renderer, NULL, vertices, 6, NULL, 0);
+}
+
+#if 0
+void
+load_font()
+{
+
+}
+
+void
+draw_text(TTF_Font *font, const char *text, r32 scale, V4 colour)
+{
+  font->height = TTF_FontHeight(ttf);
+  font->ascent = TTF_FontAscent(ttf);
+  font->descent = -TTF_FontDescent(ttf);
+
+  font->height = TTF_FontHeight(ttf);
+  font->ascent = TTF_FontAscent(ttf);
+  font->descent = -TTF_FontDescent(ttf);
+
+  SDL_Colour sdl_colour = v4_to_sdl_colour(colour);
+
+  SDL_Surface *text_surface = TTF_RenderText_Solid(font, text, colour);
+
+  SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+
+  SDL_DestroyTexture(texture);
+  SDL_FreeSurface(surface);
+
+  int texW = 0;
+  int texH = 0;
+  SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
+  SDL_Rect dstrect = { 0, 0, texW, texH };
+
+  SDL_RenderCopy();
 }
 #endif
 
@@ -107,15 +149,37 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
 
+    state->font = TTF_OpenFont("ENDORALT.ttf", 24);
+    if (state->font == NULL)
+    {
+      BP_MSG(TTF_GetError());
+    }
+
     state->is_initialised = true;
   }
 
-  state->time += input->update_dt;
+  if (input->mouse_left.was_down)
+  {
+    state->is_paused = !state->is_paused;
+  }
+
+  if (!state->is_paused)
+  {
+    state->time += input->update_dt;
+  }
 
   V2 pos = v2(100, 100);
   V2 dim = v2(300, 300);
   V4 colour = v4(1, 0, 1, 1);
-  draw_rect(renderer, pos, dim, colour);
+  //draw_rect(renderer, pos, dim, colour);
+
+  V2 origin = v2(400, 300);
+  r32 scale = 150.0f;
+  V2 x_axis = v2(scale * cosine(state->time), scale * sine(state->time));
+  V2 y_axis = v2(scale * -sine(state->time), scale * cosine(state->time));
+  //V2 x_axis = v2(scale * 1.0f, 0.0f);
+  //V2 y_axis = v2(0.0f, scale * 1.0f);
+  draw_rect_on_axis(renderer, origin, x_axis, y_axis, colour);
 
   // square_orbits();
 

@@ -11,8 +11,11 @@ typedef struct MemArena
 typedef struct State
 {
   b32 is_initialised;
+  b32 is_paused;
 
   MemArena mem_arena;
+
+  TTF_Font *font;
 
   r32 time; 
 } State;

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: zlib-acknowledgement
-
-#include <SDL2/SDL.h>
+#include "SDL.h"
+#include <SDL2/SDL_ttf.h>
 
 #include "types.h"
 #include "debug.h"
-//#include "math.h"
+#include "math.h"
 #include "vector.h"
 #include "platform.h"
 
@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "io.c"
+
 
 INTERNAL u32
 get_refresh_rate(SDL_Window *window)
@@ -77,7 +78,6 @@ reload_update_and_render(LoadableUpdateAndRender *loadable_update_and_render)
     void *load_handle = SDL_LoadObject(load_file);
     if (load_handle != NULL)
     {
-      // load("debug_frame_end");
       __extension__ UpdateAndRender update_and_render = \
         (UpdateAndRender)SDL_LoadFunction(load_handle, "update_and_render"); 
       if (update_and_render != NULL)
@@ -122,92 +122,159 @@ get_elapsed_seconds(u64 last_timer, u64 current_timer)
   return result;
 }
 
+INTERNAL void
+map_window_mouse_to_render_mouse(SDL_Window *window, SDL_Renderer *renderer, Input *input)
+{
+  s32 current_window_width, current_window_height = 0;
+  SDL_GetWindowSize(window, &current_window_width, &current_window_height);
+
+  s32 logical_render_width, logical_render_height = 0;
+  SDL_RenderGetLogicalSize(renderer, &logical_render_width, &logical_render_height);
+
+  s32 window_mouse_x, window_mouse_y = 0;
+  u32 mouse_state = SDL_GetMouseState(&window_mouse_x, &window_mouse_y);
+
+  r32 mouse_x_norm = (r32)window_mouse_x / (r32)current_window_width;
+  r32 mouse_y_norm = (r32)window_mouse_y / (r32)current_window_height;
+
+  s32 corrected_mouse_x = round_r32_to_s32(mouse_x_norm * logical_render_width); 
+  s32 corrected_mouse_y = round_r32_to_s32(mouse_y_norm * logical_render_height); 
+
+  input->mouse_x = corrected_mouse_x;
+  input->mouse_y = corrected_mouse_y;
+}
+
 int
 main(int argc, char *argv[])
 {
   if (SDL_Init(SDL_INIT_VIDEO) == 0)
   {
-    SDL_version sdl_version = {0};
-    SDL_GetVersion(&sdl_version);
-
-    V2u window_dim = {0};
-    window_dim.w = 1280; 
-    window_dim.h = 720;
-    SDL_Window *window = SDL_CreateWindow("Name", SDL_WINDOWPOS_CENTERED, 
-                          SDL_WINDOWPOS_CENTERED, window_dim.w, window_dim.h, 
-                          SDL_WINDOW_RESIZABLE);
-    if (window != NULL)
+    if (TTF_Init() == 0)
     {
-      SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
-      if (renderer != NULL)
+      V2u window_dim = {0};
+      window_dim.w = 1280; 
+      window_dim.h = 720;
+      SDL_Window *window = SDL_CreateWindow("Name", SDL_WINDOWPOS_CENTERED, 
+          SDL_WINDOWPOS_CENTERED, window_dim.w, window_dim.h, 
+          SDL_WINDOW_RESIZABLE);
+      if (window != NULL)
       {
-        // IMPORTANT(Ryan): Mouse values line up to this logical width and height
-        SDL_RenderSetLogicalSize(renderer, window_dim.w, window_dim.h);
-        // SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
-        
-        u32 memory_size = GIGABYTES(1);
-        void *mem = calloc(memory_size, 1);
-        if (mem != NULL)
+        SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
+        if (renderer != NULL)
         {
-          Memory memory = {0};
-          memory.size = memory_size;
-          memory.mem = mem;
+          // IMPORTANT(Ryan): Mouse values line up to this logical width and height
+          SDL_RenderSetLogicalSize(renderer, window_dim.w, window_dim.h);
+          // SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-          // TODO(Ryan): Will have to call again if in fullscreen mode
-          Input input = {0};
-          u32 refresh_rate = get_refresh_rate(window);
-          input.update_dt = 1.0f / (r32)refresh_rate;
-          
-          LoadableUpdateAndRender loadable_update_and_render = {0};
-          loadable_update_and_render.base_file = "/home/ryan/prog/personal/gui/run/gui.so";
-          loadable_update_and_render.toggle_file = "/home/ryan/prog/personal/gui/run/gui.so.toggle";
-
-          UpdateAndRender current_update_and_render = \
-            reload_update_and_render(&loadable_update_and_render);
-          if (current_update_and_render != NULL)
+          u32 memory_size = GIGABYTES(1);
+          void *mem = calloc(memory_size, 1);
+          if (mem != NULL)
           {
-            b32 want_to_run = true;
-            while (want_to_run)
+            Memory memory = {0};
+            memory.size = memory_size;
+            memory.mem = mem;
+
+            // TODO(Ryan): Will have to call again if in fullscreen mode
+            Input input[2] = {0};
+            Input *cur_input = &input[0];
+            Input *prev_input = &input[1];
+            u32 refresh_rate = get_refresh_rate(window);
+            cur_input->update_dt = 1.0f / (r32)refresh_rate;
+
+            LoadableUpdateAndRender loadable_update_and_render = {0};
+            loadable_update_and_render.base_file = "/home/ryan/prog/personal/gui/run/gui.so";
+            loadable_update_and_render.toggle_file = "/home/ryan/prog/personal/gui/run/gui.so.toggle";
+
+            UpdateAndRender current_update_and_render = \
+                                                        reload_update_and_render(&loadable_update_and_render);
+            if (current_update_and_render != NULL)
             {
-              SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-
-              SDL_Event event = {0};
-              while (SDL_PollEvent(&event))
+              b32 want_to_run = true;
+              while (want_to_run)
               {
-                switch (event.type)
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+
+
+                SDL_Event event = {0};
+                while (SDL_PollEvent(&event))
                 {
-                  case SDL_QUIT:
+                  switch (event.type)
                   {
-                    want_to_run = false;
-                  } break;
-                  case SDL_MOUSEMOTION:
-                  {
-                     input.mouse_x = event.motion.x;
-                     input.mouse_y = event.motion.y;
-                  } break;
+                    case SDL_QUIT:
+                      {
+                        want_to_run = false;
+                      } break;
+                    case SDL_MOUSEBUTTONDOWN:
+                    case SDL_MOUSEBUTTONUP:
+                      {
+                        if (event.button.button == SDL_BUTTON_LEFT) 
+                        {
+                          cur_input->mouse_left.is_down = (event.button.state == SDL_PRESSED);
+                        }
+                        if (event.button.button == SDL_BUTTON_MIDDLE)
+                        {
+                          cur_input->mouse_middle.is_down = (event.button.state == SDL_PRESSED);
+                        }
+                        if (event.button.button == SDL_BUTTON_RIGHT)
+                        {
+                          cur_input->mouse_right.is_down = (event.button.state == SDL_PRESSED);
+                        }
+                      } break;
+                  }
                 }
+
+                map_window_mouse_to_render_mouse(window, renderer, cur_input);
+
+                current_update_and_render = \
+                                            reload_update_and_render(&loadable_update_and_render);
+
+                SDL_RenderClear(renderer);
+
+                for (u32 input_button_i = 0;
+                    input_button_i < ARRAY_COUNT(cur_input->buttons);
+                    ++input_button_i)
+                {
+                  DigitalButton *cur_button = &cur_input->buttons[input_button_i];
+                  DigitalButton *prev_button = &prev_input->buttons[input_button_i];
+
+                  if (prev_button->is_down && !cur_button->is_down)
+                  {
+                    cur_button->was_down = true;
+                  }
+                }
+
+                current_update_and_render(renderer, cur_input, &memory);
+
+                for (u32 input_button_i = 0;
+                    input_button_i < ARRAY_COUNT(cur_input->buttons);
+                    ++input_button_i)
+                {
+                  DigitalButton *cur_button = &cur_input->buttons[input_button_i];
+                  cur_button->was_down = false;
+                }
+
+                *prev_input = *cur_input;
+
+                SDL_RenderPresent(renderer);
               }
-
-              current_update_and_render = \
-                reload_update_and_render(&loadable_update_and_render);
-
-              SDL_RenderClear(renderer);
-
-              current_update_and_render(renderer, &input, &memory);
-
-              SDL_RenderPresent(renderer);
+            }
+            else
+            {
+              BP_MSG(SDL_GetError());
+              SDL_Quit();
+              return 1;
             }
           }
           else
           {
-            BP_MSG(SDL_GetError());
+            EBP();
             SDL_Quit();
             return 1;
           }
         }
         else
         {
-          EBP();
+          BP_MSG(SDL_GetError());
           SDL_Quit();
           return 1;
         }
@@ -221,7 +288,7 @@ main(int argc, char *argv[])
     }
     else
     {
-      BP_MSG(SDL_GetError());
+      BP_MSG(TTF_GetError());
       SDL_Quit();
       return 1;
     }
