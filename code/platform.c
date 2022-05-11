@@ -151,6 +151,8 @@ main(int argc, char *argv[])
   {
     if (TTF_Init() == 0)
     {
+      //SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+
       V2u window_dim = {0};
       window_dim.w = 1280; 
       window_dim.h = 720;

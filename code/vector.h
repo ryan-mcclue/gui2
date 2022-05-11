@@ -135,6 +135,19 @@ v4(r32 x, r32 y, r32 z, r32 w)
 
   return result;
 }
+
+INTERNAL V4
+v4_hadamard(V4 vec1, V4 vec2)
+{
+  V4 result = {0};
+
+  result.x = vec1.x * vec2.x;
+  result.y = vec1.y * vec2.y;
+  result.z = vec1.z * vec2.z;
+  result.w = vec1.w * vec2.w;
+
+  return result;
+}
 typedef V4 V3;
 
 typedef u32 v4u __attribute__((VECTOR_SIZE(4, u32)));

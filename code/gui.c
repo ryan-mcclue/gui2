@@ -101,29 +101,46 @@ draw_rect_on_axis(SDL_Renderer *renderer, V2 origin, V2 x_axis, V2 y_axis, V4 co
   SDL_RenderGeometry(renderer, NULL, vertices, 6, NULL, 0);
 }
 
-typedef struct Glyph
+INTERNAL CapitalMonospacedFont
+load_capital_monospace_font(SDL_Renderer *renderer, const char *font_name)
 {
-  SDL_Texture *glyph;
-} Glyph;
+  CapitalMonospacedFont result = {0};
 
-typedef struct Font
-{
-  Glyph glyphs[256]; 
-} Font;
-
-INTERNAL Font
-load_font(const char *font_name)
-{
-  Font result = {0};
-
-  TTF_Font *ttf_font = TTF_OpenFont(font_name, 24);
+  TTF_Font *ttf_font = TTF_OpenFont(font_name, 128);
   if (ttf_font != NULL)
   {
-    for (char ch = 0; ch < ; ++ch)
+    if (TTF_FontFaceIsFixedWidth(ttf_font))
     {
-      SDL_Surface *glyph_surface = TTF_RenderText_Solid(ttf_font, text, colour);
-      SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-      SDL_FreeSurface(surface);
+      V4 glyph_colour = v4(1, 1, 1, 1); 
+      SDL_Colour sdl_glyph_colour = v4_to_sdl_colour(glyph_colour);
+
+      for (char ch = PRINTABLE_ASCII_START; ch <= PRINTABLE_ASCII_END; ++ch)
+      {
+        SDL_Surface *glyph_surface = TTF_RenderGlyph_Blended(ttf_font, ch, sdl_glyph_colour);
+        if (glyph_surface != NULL)
+        {
+          SDL_Texture *glyph_texture = SDL_CreateTextureFromSurface(renderer, glyph_surface);
+          if (glyph_texture != NULL)
+          {
+            result.glyphs[ch].tex = glyph_texture;
+            result.glyphs[ch].colour_mod = glyph_colour;
+            if (ch == 'W')
+            {
+              SDL_QueryTexture(glyph_texture, NULL, NULL, &result.width, &result.height);
+            }
+          }
+          else
+          {
+            BP_MSG(SDL_GetError());
+          }
+
+          SDL_FreeSurface(glyph_surface);
+        }
+        else
+        {
+          BP_MSG(TTF_GetError());
+        }
+      }
     }
   }
   else
@@ -136,31 +153,33 @@ load_font(const char *font_name)
   return result;
 }
 
-#if 0
-void
-draw_text(TTF_Font *font, const char *text, r32 scale, V4 colour)
+INTERNAL void
+draw_text(SDL_Renderer *renderer, CapitalMonospacedFont *font, char *text, V2 pos, 
+          r32 scale, V4 colour)
 {
-  font->height = TTF_FontHeight(ttf);
-  font->ascent = TTF_FontAscent(ttf);
-  font->descent = -TTF_FontDescent(ttf);
+  r32 at_x = pos.x;
+  for (char *ch = text; *ch != '\0'; ++ch)
+  {
+    V4 orig_colour_mod = font->glyphs[*ch].colour_mod;
+    V4 new_colour_mod = v4_hadamard(orig_colour_mod, colour);
+    SDL_Colour new_sdl_colour = v4_to_sdl_colour(new_colour_mod);
 
-  font->height = TTF_FontHeight(ttf);
-  font->ascent = TTF_FontAscent(ttf);
-  font->descent = -TTF_FontDescent(ttf);
+    SDL_Texture *glyph_texture = font->glyphs[*ch].tex;
+    
+    SDL_SetTextureColorMod(glyph_texture, new_sdl_colour.r, new_sdl_colour.g, new_sdl_colour.b);
 
-  SDL_Colour sdl_colour = v4_to_sdl_colour(colour);
+    SDL_Rect dst_rect = {0};
+    dst_rect.x = at_x;
+    dst_rect.y = pos.y;
+    dst_rect.w = font->width * scale;
+    dst_rect.h = font->height * scale;
 
+    SDL_RenderCopy(renderer, glyph_texture, NULL, &dst_rect);
 
-  SDL_DestroyTexture(texture);
+    at_x += dst_rect.w;
+  }
 
-  int texW = 0;
-  int texH = 0;
-  SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
-  SDL_Rect dstrect = { 0, 0, texW, texH };
-
-  SDL_RenderCopy();
 }
-#endif
 
 void
 update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
@@ -174,6 +193,9 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     u64 start_mem_size = memory->size - sizeof(State);
     state->mem_arena = create_mem_arena(start_mem, start_mem_size);
 
+    state->font = \
+      load_capital_monospace_font(renderer, 
+                                  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
 
     state->is_initialised = true;
   }
@@ -187,6 +209,8 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
   {
     state->time += input->update_dt;
   }
+
+  draw_text(renderer, &state->font, "RYAN!", v2(300, 300), 1.4f, v4(1, 0, 1, 1));
 
   V2 block1_pos = v2(100, 100);
   V2 block1_dim = v2(100, 100);
