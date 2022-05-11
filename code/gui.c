@@ -10,10 +10,10 @@
 
 #include "gui.h"
 
-INTERNAL MemArena
+INTERNAL MemoryArena
 create_mem_arena(void *mem, u64 size)
 {
-  MemArena result = {0};
+  MemoryArena result = {0};
 
   result.base = (u8 *)mem;
   result.size = size;
@@ -29,7 +29,7 @@ create_mem_arena(void *mem, u64 size)
   (elem *)(obtain_mem(arena, sizeof(elem) * (len)))
 
 INTERNAL void *
-obtain_mem(MemArena *arena, u64 size)
+obtain_mem(MemoryArena *arena, u64 size)
 {
   void *result = NULL;
   ASSERT(arena->used + size < arena->size);
@@ -160,25 +160,134 @@ draw_text(SDL_Renderer *renderer, CapitalMonospacedFont *font, char *text, V2 po
   r32 at_x = pos.x;
   for (char *ch = text; *ch != '\0'; ++ch)
   {
-    V4 orig_colour_mod = font->glyphs[*ch].colour_mod;
-    V4 new_colour_mod = v4_hadamard(orig_colour_mod, colour);
-    SDL_Colour new_sdl_colour = v4_to_sdl_colour(new_colour_mod);
-
-    SDL_Texture *glyph_texture = font->glyphs[*ch].tex;
-    
-    SDL_SetTextureColorMod(glyph_texture, new_sdl_colour.r, new_sdl_colour.g, new_sdl_colour.b);
-
     SDL_Rect dst_rect = {0};
-    dst_rect.x = at_x;
-    dst_rect.y = pos.y;
     dst_rect.w = font->width * scale;
     dst_rect.h = font->height * scale;
 
-    SDL_RenderCopy(renderer, glyph_texture, NULL, &dst_rect);
+    if (*ch != ' ')
+    {
+      V4 orig_colour_mod = font->glyphs[*ch].colour_mod;
+      V4 new_colour_mod = v4_hadamard(orig_colour_mod, colour);
+      SDL_Colour new_sdl_colour = v4_to_sdl_colour(new_colour_mod);
+
+      SDL_Texture *glyph_texture = font->glyphs[*ch].tex;
+
+      SDL_SetTextureColorMod(glyph_texture, new_sdl_colour.r, new_sdl_colour.g, new_sdl_colour.b);
+
+      dst_rect.x = at_x;
+      dst_rect.y = pos.y;
+
+      SDL_RenderCopy(renderer, glyph_texture, NULL, &dst_rect);
+    }
 
     at_x += dst_rect.w;
   }
 
+}
+
+#define MAX_PAIR_COUNT 32
+typedef struct TwoNumberSumResult
+{
+  u32 pair_count;
+  V2s pairs[MAX_PAIR_COUNT];
+} TwoNumberSumResult;
+
+INTERNAL TwoNumberSumResult
+two_number_sum(s32 *arr, u32 arr_count, s32 target_sum)
+{
+  TwoNumberSumResult result = {0};
+
+  for (u32 arr_i = 0;
+       arr_i < arr_count;
+       ++arr_i)
+  {
+    s32 starting_num = arr[arr_i];
+    for (u32 sub_arr_i = 0;
+         sub_arr_i < arr_count;
+         sub_arr_i++)
+    {
+      if (sub_arr_i == arr_i)
+      {
+        continue;
+      }
+
+      s32 test_num = arr[sub_arr_i];
+      if (starting_num + test_num == target_sum)
+      {
+        V2s *pair = &result.pairs[result.pair_count];
+        pair->a = starting_num;
+        pair->b = test_num;
+      }
+    }
+  }
+
+  return result;
+}
+
+INTERNAL void
+draw_int_array(SDL_Renderer *renderer, CapitalMonospacedFont *font, V2 pos, 
+               s32 *arr, u32 arr_count)
+{
+  char int_buf[128] = {"{"};
+  u32 int_buf_pos = 1;
+  char num_buf[8] = {0};
+
+  for (u32 arr_i = 0;
+       arr_i < arr_count;
+       ++arr_i)
+  {
+    s32 cur_num = arr[arr_i]; 
+    if (arr_i == arr_count - 1)
+    {
+      snprintf(num_buf, sizeof(num_buf), "%d", cur_num);
+    }
+    else
+    {
+      snprintf(num_buf, sizeof(num_buf), "%d, ", cur_num);
+    }
+    u32 int_buf_pos_move_amount = strlen(num_buf);
+
+    memmove(int_buf + int_buf_pos, num_buf, int_buf_pos_move_amount);
+    int_buf_pos += int_buf_pos_move_amount;
+  }
+  int_buf[int_buf_pos] = '}';
+
+  draw_text(renderer, font, int_buf, pos, 0.25f, v4(1, 1, 1, 1)); 
+}
+
+typedef struct TwoNumberSumState
+{
+  s32 target_sum;
+  V2s pairs[MAX_PAIR_COUNT];
+  s32 base_number; 
+  s32 test_number;
+
+  u32 arr_count;
+  s32 arr;
+} TwoNumberSumState;
+
+INTERNAL void
+draw_two_number_sum(TwoNumberSumState *state)
+{
+  //draw_int_array(renderer, &state->font, v2(100, 100), arr, arr_count);
+  for (u32 arr_i = 0;
+       arr_i < state->arr_count;
+       ++arr_i)
+  {
+    s32 cur_num = arr[arr_i]; 
+    state-> ;
+    if (arr_i == arr_count - 1)
+    {
+      snprintf(num_buf, sizeof(num_buf), "%d", cur_num);
+    }
+    else
+    {
+      snprintf(num_buf, sizeof(num_buf), "%d, ", cur_num);
+    }
+    u32 int_buf_pos_move_amount = strlen(num_buf);
+
+    memmove(int_buf + int_buf_pos, num_buf, int_buf_pos_move_amount);
+    int_buf_pos += int_buf_pos_move_amount;
 }
 
 void
@@ -196,9 +305,18 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     state->font = \
       load_capital_monospace_font(renderer, 
                                   "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
-
     state->is_initialised = true;
   }
+
+  s32 arr[] = {3, 5, -4, 8, 11, 1, -1, 6, 10, 500};
+  u32 arr_count = ARRAY_COUNT(arr);
+  s32 target_sum = 10;
+  draw_two_number_sum(arr, arr_count, target_sum);
+
+
+  return;
+
+#if 0
 
   if (input->mouse_left.was_down)
   {
@@ -210,7 +328,7 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     state->time += input->update_dt;
   }
 
-  draw_text(renderer, &state->font, "RYAN!", v2(300, 300), 1.4f, v4(1, 0, 1, 1));
+  draw_text(renderer, &state->font, "{1, 0, 0, 4}", v2(300, 300), 0.25f, v4(1, 0, 1, 1));
 
   V2 block1_pos = v2(100, 100);
   V2 block1_dim = v2(100, 100);
@@ -241,6 +359,7 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
 
   // debug_collate_and_present();
   // debug_reset(); called inside here
+#endif
 }
 
 #if 0

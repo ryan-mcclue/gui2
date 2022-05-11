@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 #pragma once
 
-typedef struct MemArena
+typedef struct MemoryArena
 {
   u8 *base;
   u64 size;
   u64 used;
-} MemArena;
+} MemoryArena;
 
 typedef struct Texture
 {
@@ -29,7 +29,7 @@ typedef struct State
   b32 is_initialised;
   b32 is_paused;
 
-  MemArena mem_arena;
+  MemoryArena mem_arena;
 
   CapitalMonospacedFont font;
 

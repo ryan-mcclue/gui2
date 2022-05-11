@@ -14,6 +14,10 @@ typedef union V2
   };
   struct
   {
+    r32 a, b;
+  };
+  struct
+  {
     r32 w, h;
   };
   r32 e[2];
@@ -89,6 +93,10 @@ typedef union V2u
   };
   struct
   {
+    u32 a, b;
+  };
+  struct
+  {
     u32 w, h;
   };
   u32 e[2];
@@ -101,6 +109,10 @@ typedef union V2s
   struct
   {
     s32 x, y;
+  };
+  struct
+  {
+    s32 a, b;
   };
   struct
   {
