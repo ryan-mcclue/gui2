@@ -133,3 +133,16 @@ sine(r32 angle)
 
   return result;
 }
+
+INTERNAL u32
+xor_shift_u32(u32 *random_series)
+{
+	/* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+	u32 x = *random_series;
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+  *random_series = x;
+
+	return x;
+}

@@ -33,6 +33,65 @@
   #define ASSERT(cond)
 #endif
 
+typedef struct TimedBlock
+{
+  u32 counter;
+  const char *file_name;
+  const char *block_name;
+  u32 line_num;
+  u64 starting_ticks;
+} TimedBlock;
+
+typedef struct TimedRecord
+{
+  const char *file_name;
+  const char *block_name;
+  u32 line_number;
+  r32 seconds;
+} TimedRecord;
+
+TimedRecord *global_timed_records;
+
+INTERNAL void
+close_timed_block(TimedBlock *timed_block)
+{
+  TimedRecord *timed_record = global_timed_records + timed_block->counter;
+  timed_record->file_name = timed_block->file_name;
+  timed_record->block_name = timed_block->block_name;
+  timed_record->line_number = timed_block->line_num;
+  timed_record->seconds = \
+    (r32)(SDL_GetPerformanceCounter() - timed_block->starting_ticks) / (r32)SDL_GetPerformanceFrequency(); 
+}
+
+#if defined(GUI_INTERNAL)
+#define TIMED_FUNCTION__(line_number) \
+  TimedBlock timed_block##line_number __attribute__((__cleanup__(close_timed_block))) = { \
+    .counter = __COUNTER__, \
+    .file_name = __FILE__, \
+    .block_name = __func__, \
+    .line_num = line_number, \
+    .starting_ticks = SDL_GetPerformanceCounter() \
+  }; \
+
+#define TIMED_FUNCTION_(line_number) \
+  TIMED_FUNCTION__(line_number)
+
+#define TIMED_FUNCTION() \
+  TIMED_FUNCTION_(__LINE__)
+
+#define TIMED_BLOCK_START(name) \
+  u32 counter##name = __COUNTER__; \
+  TimedBlock
+
+#define TIMED_BLOCK_END(name) \
+  TimedRecord record = records + counter##name; \
+
+#else
+#define TIMED_FUNCTION()
+#define TIMED_BLOCK_START(name)
+#define TIMED_BLOCK_END(name)
+#endif
+
 #if 0
 struct DebugBlockStaticInfo
 {

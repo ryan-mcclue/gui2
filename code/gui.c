@@ -195,6 +195,8 @@ typedef struct TwoNumberSumResult
 INTERNAL TwoNumberSumResult
 two_number_sum(s32 *arr, u32 arr_count, s32 target_sum)
 {
+  TIMED_FUNCTION();
+
   TwoNumberSumResult result = {0};
 
   for (u32 arr_i = 0;
@@ -255,6 +257,7 @@ draw_int_array(SDL_Renderer *renderer, CapitalMonospacedFont *font, V2 pos,
   draw_text(renderer, font, int_buf, pos, 0.25f, v4(1, 1, 1, 1)); 
 }
 
+#if 0
 typedef struct TwoNumberSumState
 {
   s32 target_sum;
@@ -289,6 +292,47 @@ draw_two_number_sum(TwoNumberSumState *state)
     memmove(int_buf + int_buf_pos, num_buf, int_buf_pos_move_amount);
     int_buf_pos += int_buf_pos_move_amount;
 }
+#endif
+
+INTERNAL void
+overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font);
+
+
+typedef struct HashItem
+{
+  struct HashItem *next; // external chaining
+} HashItem;
+
+HashItem global_hash_table[4096]; // pow of 2 issues?
+
+INTERNAL HashItem
+get_hash_item(u32 *random_series, u32 val)
+{
+  HashItem result = {0};
+
+  u32 hash_value = xor_shift_u32(random_series) * val;
+  u32 hash_slot = hash_value & (ARRAY_COUNT(global_hash_table) - 1);
+
+  HashItem *hash_item = &global_hash_table[hash_slot];
+  do
+  {
+    if (hash_item->key == val)
+    {
+      break;
+    }
+    else
+    {
+      hash_item = hash_item->next;
+      if (hash_item == NULL)
+      {
+        return NULL;
+      }
+    }
+  } while (hash_item != NULL);
+  
+
+  return result;
+}
 
 void
 update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
@@ -311,8 +355,9 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
   s32 arr[] = {3, 5, -4, 8, 11, 1, -1, 6, 10, 500};
   u32 arr_count = ARRAY_COUNT(arr);
   s32 target_sum = 10;
-  draw_two_number_sum(arr, arr_count, target_sum);
+  TwoNumberSumResult result = two_number_sum(arr, arr_count, target_sum);
 
+  overlay_timed_records(renderer, &state->font);
 
   return;
 
@@ -362,9 +407,29 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
 #endif
 }
 
+__extension__ TimedRecord global_timed_record_table[__COUNTER__];
+TimedRecord *global_timed_records = global_timed_record_table;
+
+INTERNAL void
+overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font)
+{
+  r32 at_y = 0.0f;
+  for (u32 timed_record_i = 0;
+       timed_record_i < __COUNTER__ - 1;
+       ++timed_record_i)
+  {
+    TimedRecord timed_record = global_timed_records[timed_record_i];
+    char timed_record_buf[256] = {0};
+    snprintf(timed_record_buf, sizeof(timed_record_buf), "%s(%d): %f",
+             timed_record.block_name, timed_record.line_number, timed_record.seconds);
+    draw_text(renderer, font, timed_record_buf, v2(0.0f, at_y), 0.25f, v4(1, 1, 1, 1));
+    at_y += (font->height * 1.5f);
+  }
+}
+
+
 #if 0
 
-__extension__ DebugRecord debug_records[__COUNTER__];
 
 
 INTERNAL void
@@ -689,3 +754,4 @@ new_debug_overlay(Input *input)
 }
 
 #endif
+
