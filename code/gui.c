@@ -189,11 +189,11 @@ draw_text(SDL_Renderer *renderer, CapitalMonospacedFont *font, char *text, V2 po
 typedef struct TwoNumberSumResult
 {
   u32 pair_count;
-  V2s pairs[MAX_PAIR_COUNT];
+  V2u pairs[MAX_PAIR_COUNT];
 } TwoNumberSumResult;
 
 INTERNAL TwoNumberSumResult
-two_number_sum(s32 *arr, u32 arr_count, s32 target_sum)
+two_number_sum(u32 *arr, u32 arr_count, u32 target_sum)
 {
   TIMED_FUNCTION();
 
@@ -203,7 +203,7 @@ two_number_sum(s32 *arr, u32 arr_count, s32 target_sum)
        arr_i < arr_count;
        ++arr_i)
   {
-    s32 starting_num = arr[arr_i];
+    u32 starting_num = arr[arr_i];
     for (u32 sub_arr_i = 0;
          sub_arr_i < arr_count;
          sub_arr_i++)
@@ -213,10 +213,10 @@ two_number_sum(s32 *arr, u32 arr_count, s32 target_sum)
         continue;
       }
 
-      s32 test_num = arr[sub_arr_i];
+      u32 test_num = arr[sub_arr_i];
       if (starting_num + test_num == target_sum)
       {
-        V2s *pair = &result.pairs[result.pair_count];
+        V2u *pair = &result.pairs[result.pair_count];
         pair->a = starting_num;
         pair->b = test_num;
       }
@@ -298,40 +298,67 @@ INTERNAL void
 overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font);
 
 
-typedef struct HashItem
+typedef struct U32HashItem
 {
-  struct HashItem *next; // external chaining
-} HashItem;
+  b32 is_set;
+  u32 key, value;
+  struct U32HashItem next[4]; 
+} U32HashItem;
 
-HashItem global_hash_table[4096]; // pow of 2 issues?
+INTERNAL void
+add_u32_hash_item(U32HashItem *u32_hash_map, u32 key, u32 value)
+{
+  u32 hashing_function = ((key >> 4) * 23) << 2;
+  u32 hash_map_index = hashing_function & (ARRAY_COUNT(u32_hash_map) - 1);
+  HashItem *hash_item = &u32_hash_map[hash_map_index];
+  while (!hash_item->is_set)
+  {
+    hash_item = &hash_item->next;
+  }
+
+  hash_item->key = key;
+  hash_item->value = value;
+  hash_item->is_set = true;
+}
 
 INTERNAL HashItem
-get_hash_item(u32 *random_series, u32 val)
+get_u32_hash_item(U32HashItem *u32_hash_map, u32 key)
 {
   HashItem result = {0};
 
-  u32 hash_value = xor_shift_u32(random_series) * val;
-  u32 hash_slot = hash_value & (ARRAY_COUNT(global_hash_table) - 1);
-
-  HashItem *hash_item = &global_hash_table[hash_slot];
-  do
+  u32 hashing_function = ((key >> 4) * 23) << 2;
+  u32 hash_map_index = hashing_function & (ARRAY_COUNT(u32_hash_map) - 1);
+  result = u32_hash_map[hash_map_index];
+  if (result.is_set)
   {
-    if (hash_item->key == val)
+    if (result.key != key)
     {
-      break;
-    }
-    else
-    {
-      hash_item = hash_item->next;
-      if (hash_item == NULL)
+      for (u32 hash_item_i = 1; 
+          hash_item_i < ARRAY_COUNT(result[0].next);
+          hash_item_i++)
       {
-        return NULL;
+        result = result.next[hash_item_i];
+        if (result.key == key)
+        {
+          break;
+        }
       }
     }
-  } while (hash_item != NULL);
-  
+  }
 
   return result;
+}
+#endif
+
+INTERNAL void 
+generate_random_u32_array(u32 *random_series, u32 *arr, u32 len)
+{
+  for (u32 arr_i = 0;
+       arr_i < len;
+       arr_i++)
+  {
+    arr[arr_i] = xor_shift_u32(random_series);
+  }
 }
 
 void
@@ -352,10 +379,12 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
     state->is_initialised = true;
   }
 
-  s32 arr[] = {3, 5, -4, 8, 11, 1, -1, 6, 10, 500};
-  u32 arr_count = ARRAY_COUNT(arr);
-  s32 target_sum = 10;
-  TwoNumberSumResult result = two_number_sum(arr, arr_count, target_sum);
+  u32 random_series = rand();
+#define ARR_COUNT 400
+  u32 arr[ARR_COUNT] = {0};
+  generate_random_u32_array(&random_series, arr, ARR_COUNT);
+  u32 target_sum = 10;
+  TwoNumberSumResult result = two_number_sum(arr, ARR_COUNT, target_sum);
 
   overlay_timed_records(renderer, &state->font);
 

@@ -4,15 +4,22 @@
 #include <float.h>
 #include <math.h>
 
-// TODO(Ryan): Investigate using gcc extensions for safer macros.
-// Do they add any overhead?
-#define MAX(x, y) \
-  ((x) > (y) ? (x) : (y))
-#define MIN(x, y) \
-  ((x) < (y) ? (x) : (y))
+#define MAX(a, b) \
+({ typeof (a) _a = (a); \
+   typeof (b) _b = (b); \
+   _a > _b ? _a : _b; })
+
+#define MIN(a, b) \
+({ typeof (a) _a = (a); \
+   typeof (b) _b = (b); \
+   _a < _b ? _a : _b; })
 
 #define ARRAY_COUNT(arr) \
-  (sizeof(arr) / sizeof((arr)[0]))
+  (__builtin_choose_expr( \
+    __builtin_types_compatible_p( \
+      typeof(arr), typeof(&arr[0])), \
+      BP(), \
+      (sizeof(a)/sizeof(a[0]))))
 
 // TODO(Ryan): Investigate replacing CRT with SIMD instructions
 

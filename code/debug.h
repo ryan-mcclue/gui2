@@ -47,7 +47,7 @@ typedef struct TimedRecord
   const char *file_name;
   const char *block_name;
   u32 line_number;
-  r32 seconds;
+  r64 seconds;
 } TimedRecord;
 
 TimedRecord *global_timed_records;
@@ -60,7 +60,7 @@ close_timed_block(TimedBlock *timed_block)
   timed_record->block_name = timed_block->block_name;
   timed_record->line_number = timed_block->line_num;
   timed_record->seconds = \
-    (r32)(SDL_GetPerformanceCounter() - timed_block->starting_ticks) / (r32)SDL_GetPerformanceFrequency(); 
+    (r64)(SDL_GetPerformanceCounter() - timed_block->starting_ticks) / (r64)SDL_GetPerformanceFrequency(); 
 }
 
 #if defined(GUI_INTERNAL)
