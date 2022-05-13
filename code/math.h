@@ -5,12 +5,12 @@
 #include <math.h>
 
 #define MAX(a, b) \
-({ typeof (a) _a = (a); \
+__extension__ ({ typeof (a) _a = (a); \
    typeof (b) _b = (b); \
    _a > _b ? _a : _b; })
 
 #define MIN(a, b) \
-({ typeof (a) _a = (a); \
+__extension__ ({ typeof (a) _a = (a); \
    typeof (b) _b = (b); \
    _a < _b ? _a : _b; })
 
@@ -19,7 +19,15 @@
     __builtin_types_compatible_p( \
       typeof(arr), typeof(&arr[0])), \
       BP(), \
-      (sizeof(a)/sizeof(a[0]))))
+      (sizeof(arr)/sizeof(arr[0]))))
+
+#define IS_POW2(val) \
+__extension__ ({ typeof (val) _val = (val); \
+   (_val & (_val - 1)) == 0; })
+
+#define ALIGN_U32_POW2(val) \
+  (1 << (32 - __builtin_clz(val - 1)))
+
 
 // TODO(Ryan): Investigate replacing CRT with SIMD instructions
 

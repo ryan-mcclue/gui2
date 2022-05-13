@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 #pragma once
 
-typedef struct MemoryArena
-{
-  u8 *base;
-  u64 size;
-  u64 used;
-} MemoryArena;
 
 typedef struct Texture
 {

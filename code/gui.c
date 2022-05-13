@@ -8,34 +8,106 @@
 #include "vector.h"
 #include "platform.h"
 
+#include "mem.c"
 #include "gui.h"
 
-INTERNAL MemoryArena
-create_mem_arena(void *mem, u64 size)
+typedef struct U32HashItem
 {
-  MemoryArena result = {0};
+  b32 is_set;
+  u32 key, value;
+  struct U32HashItem *next; 
+} U32HashItem;
 
-  result.base = (u8 *)mem;
-  result.size = size;
-  result.used = 0;
+typedef struct U32HashMap
+{
+  u32 size;
+  u32 chain_size;
+  U32HashItem *hash_items;
+} U32HashMap;
+
+#define HASHING_FUNCTION(key) \
+  ((((key) >> 4) * 23) << 2)
+
+INTERNAL U32HashMap *
+create_u32_hash_map(MemoryArena *arena, u32 size, u32 chain_size)
+{
+  ASSERT(IS_POW2(size));
+
+  U32HashMap *result = MEM_PUSH_STRUCT(arena, U32HashMap); 
+  result->size = size;
+  result->chain_size = chain_size;
+  result->hash_items = MEM_PUSH_ARRAY(arena, U32HashItem, size);
+
+  for (u32 hash_item_i = 0;
+       hash_item_i < size;
+       ++hash_item_i)
+  {
+    U32HashItem *hash_item = result->hash_items + hash_item_i;
+    hash_item->next = MEM_PUSH_ARRAY(arena, U32HashItem, chain_size);
+  }
 
   return result;
 }
 
-#define MEM_RESERVE_STRUCT(arena, struct_name) \
-  (struct_name *)(obtain_mem(arena, sizeof(struct_name)))
-
-#define MEM_RESERVE_ARRAY(arena, elem, len) \
-  (elem *)(obtain_mem(arena, sizeof(elem) * (len)))
-
-INTERNAL void *
-obtain_mem(MemoryArena *arena, u64 size)
+INTERNAL void
+add_u32_hash_item(U32HashMap *hash_map, u32 key, u32 value)
 {
-  void *result = NULL;
-  ASSERT(arena->used + size < arena->size);
+  u32 hash_value = HASHING_FUNCTION(key);
+  u32 hash_map_index = hash_value & (hash_map->size - 1);
+  U32HashItem *hash_item = hash_map->hash_items + hash_map_index;;
+  
+  if (hash_item->is_set)
+  {
+    for (u32 hash_item_i = 1;
+        hash_item_i < hash_map->chain_size;
+        hash_item_i++)
+    {
+      hash_item = hash_item->next;
+      if (!hash_item->is_set)
+      {
+        break;
+      }
+    }
+  }
 
-  result = (u8 *)arena->base + arena->used;
-  arena->used += size;
+  ASSERT(!hash_item->is_set);
+
+  hash_item->key = key;
+  hash_item->value = value;
+  hash_item->is_set = true;
+}
+
+INTERNAL U32HashItem *
+get_u32_hash_item(U32HashMap *hash_map, u32 key)
+{
+  U32HashItem *result = NULL;
+
+  u32 hash_value = HASHING_FUNCTION(key);
+  u32 hash_map_index = hash_value & (hash_map->size - 1);
+
+  U32HashItem *hash_item = hash_map->hash_items + hash_map_index;;
+
+  if (hash_item->is_set)
+  {
+    if (hash_item->key != key)
+    {
+      for (u32 hash_item_i = 1; 
+          hash_item_i < hash_map->chain_size;
+          hash_item_i++)
+      {
+        hash_item = hash_item->next;
+        if (hash_item->key == key)
+        {
+          result = hash_item;
+          break;
+        }
+      }
+    }
+    else
+    {
+      result = hash_item;
+    }
+  }
 
   return result;
 }
@@ -193,7 +265,7 @@ typedef struct TwoNumberSumResult
 } TwoNumberSumResult;
 
 INTERNAL TwoNumberSumResult
-two_number_sum(u32 *arr, u32 arr_count, u32 target_sum)
+two_number_sum_quadratic(u32 *arr, u32 arr_count, u32 target_sum)
 {
   TIMED_FUNCTION();
 
@@ -221,6 +293,29 @@ two_number_sum(u32 *arr, u32 arr_count, u32 target_sum)
         pair->b = test_num;
       }
     }
+  }
+
+  return result;
+}
+
+INTERNAL TwoNumberSumResult
+two_number_sum_linear(MemoryArena *mem_arena, u32 *arr, u32 arr_count, u32 target_sum)
+{
+  TwoNumberSumResult result = {0}; 
+
+  U32HashMap *hash_map = create_u32_hash_map(mem_arena, ALIGN_U32_POW2(arr_count), 4);
+  for (u32 arr_i = 0;
+       arr_i < arr_count;
+       ++arr_i)
+  {
+    add_u32_hash_item(hash_map, arr[arr_i], arr[arr_i]);
+  }
+
+  for (u32 arr_i = 0;
+       arr_i < arr_count;
+       ++arr_i)
+  {
+    add_u32_hash_item(hash_map, arr[arr_i], arr[arr_i]);
   }
 
   return result;
@@ -298,57 +393,6 @@ INTERNAL void
 overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font);
 
 
-typedef struct U32HashItem
-{
-  b32 is_set;
-  u32 key, value;
-  struct U32HashItem next[4]; 
-} U32HashItem;
-
-INTERNAL void
-add_u32_hash_item(U32HashItem *u32_hash_map, u32 key, u32 value)
-{
-  u32 hashing_function = ((key >> 4) * 23) << 2;
-  u32 hash_map_index = hashing_function & (ARRAY_COUNT(u32_hash_map) - 1);
-  HashItem *hash_item = &u32_hash_map[hash_map_index];
-  while (!hash_item->is_set)
-  {
-    hash_item = &hash_item->next;
-  }
-
-  hash_item->key = key;
-  hash_item->value = value;
-  hash_item->is_set = true;
-}
-
-INTERNAL HashItem
-get_u32_hash_item(U32HashItem *u32_hash_map, u32 key)
-{
-  HashItem result = {0};
-
-  u32 hashing_function = ((key >> 4) * 23) << 2;
-  u32 hash_map_index = hashing_function & (ARRAY_COUNT(u32_hash_map) - 1);
-  result = u32_hash_map[hash_map_index];
-  if (result.is_set)
-  {
-    if (result.key != key)
-    {
-      for (u32 hash_item_i = 1; 
-          hash_item_i < ARRAY_COUNT(result[0].next);
-          hash_item_i++)
-      {
-        result = result.next[hash_item_i];
-        if (result.key == key)
-        {
-          break;
-        }
-      }
-    }
-  }
-
-  return result;
-}
-#endif
 
 INTERNAL void 
 generate_random_u32_array(u32 *random_series, u32 *arr, u32 len)
@@ -380,13 +424,16 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
   }
 
   u32 random_series = rand();
-#define ARR_COUNT 400
-  u32 arr[ARR_COUNT] = {0};
-  generate_random_u32_array(&random_series, arr, ARR_COUNT);
+  u32 arr_count = 400;
+  u32 arr[arr_count];
+  generate_random_u32_array(&random_series, arr, arr_count);
   u32 target_sum = 10;
-  TwoNumberSumResult result = two_number_sum(arr, ARR_COUNT, target_sum);
+  TwoNumberSumResult quadratic_result = two_number_sum_quadratic(arr, arr_count, target_sum);
+  TwoNumberSumResult linear_result = two_number_sum_linear(&state->mem_arena, arr, arr_count, target_sum);
 
   overlay_timed_records(renderer, &state->font);
+
+  reset_mem_arena(&state->mem_arena);
 
   return;
 
