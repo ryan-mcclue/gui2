@@ -16,6 +16,7 @@ create_mem_arena(void *mem, u64 size)
 INTERNAL void
 reset_mem_arena(MemoryArena *arena)
 {
+  memset(arena->base, 0, arena->used);
   arena->used = 0;
 }
 

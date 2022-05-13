@@ -44,6 +44,15 @@ create_u32_hash_map(MemoryArena *arena, u32 size, u32 chain_size)
   {
     U32HashItem *hash_item = result->hash_items + hash_item_i;
     hash_item->next = MEM_PUSH_ARRAY(arena, U32HashItem, chain_size);
+
+    U32HashItem *hash_item_chain = hash_item->next;
+    for (u32 hash_item_chain_i = 2;
+         hash_item_chain_i < chain_size;
+         ++hash_item_chain_i)
+    {
+      hash_item_chain->next = &hash_item->next[hash_item_chain_i];
+      hash_item_chain = hash_item_chain->next;
+    }
   }
 
   return result;
@@ -301,9 +310,11 @@ two_number_sum_quadratic(u32 *arr, u32 arr_count, u32 target_sum)
 INTERNAL TwoNumberSumResult
 two_number_sum_linear(MemoryArena *mem_arena, u32 *arr, u32 arr_count, u32 target_sum)
 {
+  TIMED_FUNCTION();
+
   TwoNumberSumResult result = {0}; 
 
-  U32HashMap *hash_map = create_u32_hash_map(mem_arena, ALIGN_U32_POW2(arr_count), 4);
+  U32HashMap *hash_map = create_u32_hash_map(mem_arena, ALIGN_U32_POW2(arr_count), 32);
   for (u32 arr_i = 0;
        arr_i < arr_count;
        ++arr_i)
@@ -315,7 +326,15 @@ two_number_sum_linear(MemoryArena *mem_arena, u32 *arr, u32 arr_count, u32 targe
        arr_i < arr_count;
        ++arr_i)
   {
-    add_u32_hash_item(hash_map, arr[arr_i], arr[arr_i]);
+    u32 elem = arr[arr_i];
+    u32 target_num = target_sum - elem;
+    U32HashItem *hash_item = get_u32_hash_item(hash_map, target_num);
+    if (hash_item != NULL)
+    {
+      V2u *pair = &result.pairs[result.pair_count++];
+      pair->a = elem;
+      pair->b = hash_item->value;
+    }
   }
 
   return result;
@@ -424,7 +443,7 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
   }
 
   u32 random_series = rand();
-  u32 arr_count = 400;
+  u32 arr_count = 1000;
   u32 arr[arr_count];
   generate_random_u32_array(&random_series, arr, arr_count);
   u32 target_sum = 10;
@@ -490,6 +509,7 @@ INTERNAL void
 overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font)
 {
   r32 at_y = 0.0f;
+  r32 font_scale = 0.25f;
   for (u32 timed_record_i = 0;
        timed_record_i < __COUNTER__ - 1;
        ++timed_record_i)
@@ -498,8 +518,8 @@ overlay_timed_records(SDL_Renderer *renderer, CapitalMonospacedFont *font)
     char timed_record_buf[256] = {0};
     snprintf(timed_record_buf, sizeof(timed_record_buf), "%s(%d): %f",
              timed_record.block_name, timed_record.line_number, timed_record.seconds);
-    draw_text(renderer, font, timed_record_buf, v2(0.0f, at_y), 0.25f, v4(1, 1, 1, 1));
-    at_y += (font->height * 1.5f);
+    draw_text(renderer, font, timed_record_buf, v2(0.0f, at_y), font_scale, v4(1, 1, 1, 1));
+    at_y += (font->height * font_scale * 1.5f);
   }
 }
 
