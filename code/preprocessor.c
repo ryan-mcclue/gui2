@@ -1,0 +1,183 @@
+// SPDX-License-Identifier: zlib-acknowledgement
+
+/* thing_to_preprocess.h
+ 
+INTROSPECT(category:"something") typedef struct Variable
+{
+  
+} Variable;
+
+
+ */
+
+
+// method of annotating code
+#define INTROSPECT(params)
+
+typedef enum TokenType {
+	// reserve first 128 values for one char tokens
+	TOKEN_LAST_CHAR = 127,
+	TOKEN_INT,
+	TOKEN_NAME
+	// ..
+} TokenType;
+
+void next_token(void)
+{
+	token.start = stream;
+	switch (*stream) {
+	 case 0 ... 9:
+	 {
+		int val = 0;
+		while (isdigit(*stream)) {
+			val *= 10;
+			val += *stream++ - '0'; // convert ascii to number
+		}
+		token.type = TOKEN_INT;
+		token.val = val;
+	 } break;
+	 case 'a' ... 'z':
+   case 'A' ... 'Z':
+	 case '_':
+	 {
+		while (isalnum(*stream) || *stream == '_') {
+			stream++;		
+		}
+		token.type = TOKEN_NAME;
+		token.name = str_intern_range(token.start, stream);
+	 } break;
+	 default:
+	 {
+		token.type = *stream++;
+	 } break;
+	}	
+	token.end = stream;
+}
+
+INTERNAL void
+eat_all_whitespace_and_comments(char *stream)
+{
+  char *at = stream;
+  while (true)
+  {
+    // could be \t, \n, \r etc.
+    if (isspace(at[0]))
+    {
+      at++;
+    }
+    else if (at[0] == '/' && at[1] == '/')
+    {
+      at += 2;
+      while (at[0] != '\0' && at[0] != '\n' && at[0] != '\r')
+      {
+        at++;
+      }
+    }
+    else if (at[0] == '/' && at[1] == '*')
+    {
+      while (at[0] != '\0' && at[0] != '*' && at[1] != '\0' && at[1] != '/')
+      {
+        at++;
+      }
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
+INTERNAL Token
+get_token(char *stream)
+{
+  eat_all_whitespace_and_comments(stream);
+
+  char *at = stream;
+
+  Token result = {0};
+  result.len = 1;
+  result.text = at;
+
+  switch (at[0])
+  {
+    case '\0': 
+    {
+      result.type = TOKEN_TYPE_EOS;
+    } break;
+    case '/':
+    {
+
+    } break;
+    case '{': 
+    {
+      result.type = TOKEN_TYPE_OPEN_BRACKET;
+    } break;
+    case '}': 
+    {
+      result.type = TOKEN_TYPE_CLOSE_BRACKET;
+    } break;
+    case '"': 
+    {
+      at++;
+      result.text = at[0];
+      while (at[0] != '\0' && at[0] != '"')
+      {
+        if (at[0] == '\\' && at[1] != '\0')
+        {
+          at++;
+          result.len++;
+        }
+        at++;
+        result.len++;
+      }
+
+      if (at[0] == '"')
+      {
+        at++;
+      }
+    } break;
+    default
+    {
+      token.type = TOKEN_TYPE_UNKNOWN;
+      if (isalpha(at[0]))
+      {
+        parse_identifier();
+      }
+      else
+      {
+        parse_number();
+      }
+    } break;
+  }
+
+  return result;
+}
+
+int
+main(int argc, char *argv[])
+{
+  ReadFileResult read_result = read_entire_file_and_null_terminate("thing_to_preprocess.h");
+  char *contents = (char *)read_result.mem;
+
+  char *tokeniser_stream = contents;
+
+  b32 want_to_parse = true;
+  while (want_to_parse)
+  {
+    Token token = get_token(tokeniser_stream);
+
+    switch (token.type)
+    {
+      case TOKEN_TYPE_EOS:
+      {
+        want_to_parse = false;
+      } break;
+      case TOKEN_TYPE_EOS:
+      {
+        print_token_type();
+      } break;
+    }
+  }
+
+  return 0;
+}

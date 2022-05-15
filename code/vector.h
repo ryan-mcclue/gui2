@@ -35,7 +35,7 @@ v2(r32 x, r32 y)
 }
 
 INTERNAL r32
-vec_dot(V2 vec1, V2 vec2)
+v2_dot(V2 vec1, V2 vec2)
 {
   r32 result = 0.0f;
 
@@ -45,40 +45,62 @@ vec_dot(V2 vec1, V2 vec2)
 }
 
 INTERNAL r32
-vec_length_sq(V2 vec)
+v2_length_sq(V2 vec)
 {
   r32 result = 0.0f;
 
-  result = vec_dot(vec, vec);
+  result = v2_dot(vec, vec);
 
   return result;
 }
 
 INTERNAL r32
-vec_length(V2 vec)
+v2_length(V2 vec)
 {
   r32 result = 0.0f;
 
-  result = square_root(vec_length_sq(vec));
+  result = square_root(v2_length_sq(vec));
 
   return result;
 }
 
 INTERNAL V2
-vec_norm(V2 vec)
+v2_norm(V2 vec)
 {
-  V2 result = {vec.vec * (1.0f / vec_length(vec))};
+  V2 result = {vec.vec * (1.0f / v2_length(vec))};
 
   return result;
 }
 
 INTERNAL V2
-vec_perp(V2 vec)
+v2_perp(V2 vec)
 {
   V2 result = {0};
 
   result.x = -vec.y;
   result.y = vec.x;
+
+  return result;
+}
+
+INTERNAL V2
+v2_arm(r32 angle)
+{
+  V2 result = {0};
+
+  result.x = cosine(angle);
+  result.y = sine(angle);
+
+  return result;
+}
+
+INTERNAL V2
+v2_centered(V2 centre, V2 dim)
+{
+  V2 result = {0};
+  
+  result.x = centre.x - 0.5f * dim.x;
+  result.y = centre.y + 0.5f * dim.y;
 
   return result;
 }

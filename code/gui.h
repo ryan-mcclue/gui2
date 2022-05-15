@@ -21,7 +21,8 @@ typedef struct CapitalMonospacedFont
 typedef struct State
 {
   b32 is_initialised;
-  b32 is_paused;
+
+  b32 ui_on;
 
   MemoryArena mem_arena;
 

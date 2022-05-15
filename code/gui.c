@@ -2,6 +2,8 @@
 #include "SDL.h"
 #include <SDL2/SDL_ttf.h>
 
+#include <ctype.h>
+
 #include "types.h"
 #include "debug.h"
 #include "math.h"
@@ -251,7 +253,8 @@ draw_text(SDL_Renderer *renderer, CapitalMonospacedFont *font, char *text, V2 po
       V4 new_colour_mod = v4_hadamard(orig_colour_mod, colour);
       SDL_Colour new_sdl_colour = v4_to_sdl_colour(new_colour_mod);
 
-      SDL_Texture *glyph_texture = font->glyphs[*ch].tex;
+      u32 character_index = islower(*ch) ? toupper(*ch) : *ch;
+      SDL_Texture *glyph_texture = font->glyphs[character_index].tex;
 
       SDL_SetTextureColorMod(glyph_texture, new_sdl_colour.r, new_sdl_colour.g, new_sdl_colour.b);
 
@@ -441,15 +444,46 @@ update_and_render(SDL_Renderer *renderer, Input *input, Memory *memory)
                                   "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
     state->is_initialised = true;
   }
+  
+  char *menu_items[] = 
+  {
+    "TOGGLE PROFILER",
+    "TOGGLE CONSOLE",
+    "MARK LOOP POINT1",
+    "MARK LOOP POINT2",
+    "MARK LOOP POINT3",
+  };
+
+  r32 hot_menu_index = 0;
+  r32 best_distance_sq = R32_MAX;
+  // if (length_sq(mouse_p - origin) > radius)
+
+  r32 angle_step = TAU32 / (r32)ARRAY_COUNT(menu_items);
+  V2 menu_origin = v2(400, 400);
+  r32 menu_radius = 200.0f;
+  r32 angle = 0.0f;
+  V2 centre_dim = v2(8, 8);
+  //V2 centred = v2_centred(menu_origin, centre_dim);
+  draw_rect(renderer, menu_origin, v2(8, 8), v4(1, 1, 1, 1));
+  for (u32 menu_item_i = 0;
+       menu_item_i < ARRAY_COUNT(menu_items);
+       menu_item_i++)
+  {
+    V2 menu_item_pos = {menu_origin.vec + menu_radius * v2_arm(angle).vec};
+    draw_text(renderer, &state->font, menu_items[menu_item_i], menu_item_pos, 0.25f, v4(1, 1, 1, 1));
+    angle += angle_step;
+  }
+
+  //SDL_PointInRect(&point, &rect);
 
   u32 random_series = rand();
   u32 arr_count = 1000;
   u32 arr[arr_count];
-  generate_random_u32_array(&random_series, arr, arr_count);
+  //generate_random_u32_array(&random_series, arr, arr_count);
   u32 target_sum = 10;
-  TwoNumberSumResult quadratic_result = two_number_sum_quadratic(arr, arr_count, target_sum);
-  TwoNumberSumResult linear_result = two_number_sum_linear(&state->mem_arena, arr, arr_count, target_sum);
-
+  //TwoNumberSumResult quadratic_result = two_number_sum_quadratic(arr, arr_count, target_sum);
+  //TwoNumberSumResult linear_result = two_number_sum_linear(&state->mem_arena, arr, arr_count, target_sum);
+  
   overlay_timed_records(renderer, &state->font);
 
   reset_mem_arena(&state->mem_arena);

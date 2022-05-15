@@ -28,6 +28,8 @@ __extension__ ({ typeof (val) _val = (val); \
 #define ALIGN_U32_POW2(val) \
   (1 << (32 - __builtin_clz(val - 1)))
 
+#define PI32 3.141592f
+#define TAU32 6.283185f
 
 // TODO(Ryan): Investigate replacing CRT with SIMD instructions
 
