@@ -111,6 +111,7 @@ get_token(char *stream)
     case '{': 
     {
       result.type = TOKEN_TYPE_OPEN_BRACKET;
+      at++;
     } break;
     case '}': 
     {
@@ -142,6 +143,7 @@ get_token(char *stream)
       if (isalpha(at[0]))
       {
         parse_identifier();
+        while (isalpha(at[0]) || isnumeric(at[0]) || at[0] == '_')
       }
       else
       {
@@ -152,6 +154,83 @@ get_token(char *stream)
 
   return result;
 }
+
+INTERNAL b32
+token_equals(Token *token, char *test)
+{
+  b32 result = false;
+
+  char *token_at = token->text;
+
+  char *test_at = test;
+  u32 test_at_index = 0;
+  while (test_at[test_at_index] != '\0')
+  {
+    if (test_at[test_at_index] != token_at[test_at_index])
+    {
+      break;
+    }
+    test_at_index++;
+  }
+
+  if (test_at[test_at_index] == '\0' &&
+      token_at[test_at_index] == '\0')
+  {
+    result = true;
+  }
+
+  return result;
+}
+
+INTERNAL void
+parse_instrospectable(char *stream)
+{
+  Token token = consume_next_token(stream);
+  if (token_equals(&token, "struct"))
+  {
+    if (require_token(stream, TOKEN_TYPE_OPEN_BRACKET))
+    {
+      Token name_token = consume_next_token(stream);
+      printf("Members of: %.*s = \n", name_token.len, name_token.name);
+      // while(parsing) variant over != for enclosing parsing?
+      // != for tokens? and while(true) for others to give better error handling?
+      while (parsing)
+      {
+        Token new_token = consume_next_token(stream);
+        if (token_equals(&new_token, TOKEN_TYPE_CLOSE_BRACKET))
+        {
+          break;
+        }
+        else
+        {
+          parse_member(stream, struct_token, type_token);
+          // want offset into struct: offsetof(struct_token, member_token); 
+        }
+      }
+    }
+  }
+  else
+  {
+    fprintf(stderr, "only parse structs");
+  }
+
+}
+
+/* 
+ * meta.h
+ * enum Type {
+ *   type_u32,
+ *   type_r32,
+ * };
+ * 
+ * struct Variable {
+ *   Type type;
+ *   char *name;
+ *   u32 offset;
+ * };
+ *
+ *"{type_u32(some enum), name, offsetof}" > generated.h
+*/
 
 int
 main(int argc, char *argv[])
@@ -164,7 +243,7 @@ main(int argc, char *argv[])
   b32 want_to_parse = true;
   while (want_to_parse)
   {
-    Token token = get_token(tokeniser_stream);
+    Token token = consume_next_token(tokeniser_stream);
 
     switch (token.type)
     {
@@ -172,9 +251,16 @@ main(int argc, char *argv[])
       {
         want_to_parse = false;
       } break;
-      case TOKEN_TYPE_EOS:
+      case TOKEN_TYPE_INT:
       {
         print_token_type();
+      } break;
+      case TOKEN_TYPE_IDENTIFIER:
+      {
+        if (token_equals(&token, "INTROSPECT"))
+        {
+          parse_instrospectable(at);
+        }
       } break;
     }
   }
