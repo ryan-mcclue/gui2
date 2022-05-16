@@ -47,6 +47,6 @@ gcc $common_flags $dev_type_flags \
   code/bluetooth.c -o build/bluetooth \
   -lm -lbluetooth $(pkg-config --libs gio-2.0)
 
-pushd run
-../build/bluetooth
-popd
+#pushd run
+#../build/connector
+#popd

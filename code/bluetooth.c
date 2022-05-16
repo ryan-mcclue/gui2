@@ -3,6 +3,9 @@
 // RFCOMM protocol. 
 // Serial Port Profile is based on RFCOMM protocol
 // profile will have a UUID
+//
+// to connect to bluetooth socket, require mac address like AB:12:4B:59:23:0A
+// so, convert from "Connecting to /org/bluez/hci0/dev_5C_03_39_C5_BA_C7"
 
 #include "types.h"
 
@@ -89,39 +92,35 @@ obtain_serial_connection(char *path)
   return result;
 }
 
-INTERNAL void 
-on_adapter_changed(GDBusConnection *conn,
-                               const gchar *sender_name,
-                               const gchar *object_path,
-                               const gchar *interface_name,
-                               const gchar *signal_name,
-                               GVariant *parameters,
-                               gpointer user_data)
+
+INTERNAL void
+sleep_ms(int ms)
 {
-  const char *adapter_path = adapter_info.object_path;
+  struct timespec sleep_time = {0};
+  sleep_time.tv_nsec = ms * 1000000;
+  struct timespec leftover_sleep_time = {0};
+  nanosleep(&sleep_time, &leftover_sleep_time);
+}
 
-  if (g_strcmp0(object_path, adapter_path) == 0)
-    return;
+#define MAX_BLUETOOTH_DEVICE_COUNT 32
+GLOBAL u32 global_bluetooth_device_count;
+GLOBAL char global_bluetooth_devices[MAX_BLUETOOTH_DEVICE_COUNT][64];
 
-  if (g_list_length(devices) > 10)
-    return;
+INTERNAL void 
+on_adapter_changed(GDBusConnection *conn, const gchar *sender_name, const gchar *object_path, 
+                   const gchar *interface_name, const gchar *signal_name, GVariant *parameters,
+                   gpointer user_data)
+{
+  char *adapter_path = (char *)user_data;
 
-  if (object_path && strstr(object_path, adapter_path) != NULL)
+  if (strcmp(object_path, adapter_path) != 0)
   {
-    GList *l;
-    gboolean found = FALSE;
+    ASSERT(global_bluetooth_device_count < MAX_BLUETOOTH_DEVICE_COUNT);
 
-    for (l = devices; l != NULL; l = l->next)
+    if (strstr(object_path, adapter_path) != NULL)
     {
-      if (g_strcmp0(l->data, object_path) == 0) {
-        found = TRUE;
-	break;
-      }
-    }
-
-    if (found == FALSE)
-    {
-      devices = g_list_prepend(devices, g_strdup(object_path));
+      // do we need to check for unique devices?
+      strcpy(global_bluetooth_devices[global_bluetooth_device_count++], object_path);
     }
   }
 }
@@ -129,68 +128,60 @@ on_adapter_changed(GDBusConnection *conn,
 int 
 main(int argc, char *argv[])
 {
-  // TODO(Ryan): Way to programmatically obtain this?
+  // print out RSSI https://www.youtube.com/watch?v=W8TQONjd6kw&t=544s
+
   //int bluetooth_fd = obtain_serial_connection("/dev/ttyACM0");
   //close(bluetooth_fd);
 
-  int dev_id = hci_get_route(NULL);
-  if (dev_id >= 0)
+  int adapter_id = hci_get_route(NULL);
+  if (adapter_id >= 0)
   {
     struct hci_dev_info hci_info = {0};
-    if (hci_devinfo(dev_id, &hci_info) >= 0)
+    if (hci_devinfo(adapter_id, &hci_info) >= 0)
     {
       char *bus_name = "org.bluez";
       char *interface_name = "org.bluez.Adapter1";
-
       char object_path[256] = {"/org/bluez/"};
       strcat(object_path, hci_info.name);
 
-      printf("object path: %s\n", object_path);
-      
-     /* estsablish a connection to D-Bus which in this case must be a system ty-
-     pe. Accession the session bus results in bluez path's being unknown.
-     Thus, you might want to adjust your DBus permission policy */
+      // IMPORTANT(Ryan): May have to be root or alter DBUS permissions to access system bus
       GError *g_error = NULL;
       GDBusConnection *dbus_connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &g_error);
       if (dbus_connection != NULL)
       {
-        start_device_discovery();
-        wait_sec(10);
-        stop_device_discovery();
-
-        char *selected_device = select_from_devices();
-
-        connect_device(selected_device);
-
-        disconnect_device(selected_device);
-
-        // have a max timeout for scanning
-        u32 scan_subscription_id = g_dbus_connection_signal_subscribe(dbus_connection,
-                                              "org.bluez",
+        //start_async_device_discovery();
+        // IMPORTANT(Ryan): This will look for both classic and LE
+        // Look into Parthiban gists to filter just LE
+        u32 scan_subscription_id = \
+          g_dbus_connection_signal_subscribe(dbus_connection, "org.bluez",
                                               "org.freedesktop.DBus.Properties",
-                                              "PropertiesChanged",
-                                              NULL,
-                                              NULL,
+                                              "PropertiesChanged", NULL, NULL,
                                               G_DBUS_SIGNAL_FLAGS_NONE,
-                                              on_adapter_changed,
-                                              NULL,
-                                              NULL);
+                                              on_adapter_changed, (void *)object_path, NULL);
+        // method call
+        GVariant *res = g_dbus_connection_call_sync(dbus_connection, bus_name, object_path,
+              interface_name, "StartDiscovery", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
+              -1, NULL, &g_error);
+        g_variant_unref(res);
 
-         // method call
-         GVariant *res = g_dbus_connection_call_sync(dbus_connection,
-               bus_name,
-               object_path,
-               interface_name,
-               "StartDiscovery",
-               NULL,
-               NULL,
-               G_DBUS_CALL_FLAGS_NONE,
-               -1,
-               NULL,
-               &g_error);
-
-         g_variant_unref(res);
-
+        u32 seconds_to_scan = 10;
+        printf("Waiting %d seconds\n ...", seconds_to_scan); 
+        sleep_ms(1000 * seconds_to_scan);
+        
+        //stop_async_device_discovery();
+        g_dbus_connection_signal_unsubscribe(dbus_connection, scan_subscription_id);
+        res = g_dbus_connection_call_sync(dbus_connection, bus_name, object_path,
+              interface_name, "StopDiscovery", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
+              -1, NULL, &g_error);
+        g_variant_unref(res);
+        
+        printf("Found ...\n");
+        for (u32 bluetooth_device_i = 0;
+             bluetooth_device_i < global_bluetooth_device_count;
+             ++bluetooth_device_i)
+        {
+          printf("%s\n", global_bluetooth_devices[bluetooth_device_i]);
+        }
       }
       else
       {
@@ -210,5 +201,62 @@ main(int argc, char *argv[])
 
   return 0;
 }
+
+#if 0
+
+#define BT_BLUEZ_NAME "org.bluez"
+#define BT_MANAGER_PATH "/"
+#define BT_ADAPTER_INTERFACE    "org.bluez.Adapter1"
+#define BT_DEVICE_IFACE     "org.bluez.Device1"
+#define BT_MANAGER_INTERFACE "org.freedesktop.DBus.ObjectManager"
+#define BT_PROPERTIES_INTERFACE "org.freedesktop.DBus.Properties"
+
+int main(void)
+{
+    char *known_address = "2C:F0:A2:26:D7:F5"; /*This is your address to search */
+
+        conn = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+        proxy =  g_dbus_proxy_new_sync(conn, G_DBUS_PROXY_FLAGS_NONE, NULL, BT_BLUEZ_NAME, BT_MANAGER_PATH, BT_MANAGER_INTERFACE, NULL, &err);
+        result = g_dbus_proxy_call_sync(proxy, "GetManagedObjects", NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+
+    g_variant_get(result, "(a{oa{sa{sv}}})", &iter);
+
+        char *device_path = NULL;
+        char device_address[18] = { 0 };
+        /* Parse the signature:  oa{sa{sv}}} */
+        while (g_variant_iter_loop(iter, "{&oa{sa{sv}}}", &device_path, NULL)) {
+        {
+            char address[BT_ADDRESS_STRING_SIZE] = { 0 };
+            char *dev_addr;
+
+            dev_addr = strstr(device_path, "dev_");
+            if (dev_addr != NULL) {
+                char *pos = NULL;
+                dev_addr += 4;
+                g_strlcpy(address, dev_addr, sizeof(address));
+
+                while ((pos = strchr(address, '_')) != NULL) {
+                    *pos = ':';
+                }
+
+                g_strlcpy(device_address, address, BT_ADDRESS_STRING_SIZE);
+            }
+
+        }
+
+        if (g_strcmp0(known_address, device_address) == 0) {
+            /* Find the name of the device */
+            device_property_proxy = g_dbus_proxy_new_sync(conn, G_DBUS_PROXY_FLAGS_NONE, NULL, BT_BLUEZ_NAME, &device_path, BT_PROPERTIES_INTERFACE, NULL, NULL);
+            result = g_dbus_proxy_call_sync(proxy, "Get", g_variant_new("(ss)", BT_DEVICE_IFACE, "Alias"), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+
+            const char *local = NULL;
+            g_variant_get(result, "(v)", &temp);
+            local = g_variant_get_string(temp, NULL);
+            printf("Your desired name : %s\n", local);
+        }
+        }
+}
+
+#endif
 
 // sudo apt install raspberrypi-kernel-headers
