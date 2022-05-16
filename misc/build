@@ -20,6 +20,7 @@ common_flags="$platform_flags -DGUI_LINUX $ignored_warning_flags -Icode
   -std=gnu11 -Werror -Wall -Wextra -pedantic -Warray-bounds=2 -march=native"
   #-ffunction-sections -fdata-sections -Wl,--gc-sections"
 
+: '
 ctime -begin misc/gui.ctm
 
 gcc $common_flags $dev_type_flags \
@@ -40,7 +41,12 @@ gcc $common_flags $dev_type_flags \
   -lm -lSDL2-2.0 -lSDL2_ttf
 
 ctime -end misc/gui.ctm
+'
+gcc $common_flags $dev_type_flags \
+  $(pkg-config --cflags gio-2.0) \
+  code/bluetooth.c -o build/bluetooth \
+  -lm -lbluetooth $(pkg-config --libs gio-2.0)
 
-#pushd run
-#../build/desktop
-#popd
+pushd run
+../build/bluetooth
+popd
