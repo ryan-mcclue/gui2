@@ -216,20 +216,59 @@ parse_instrospectable(char *stream)
 
 }
 
-/* 
+/* ALMOST EVERYTHING SHOULD BE METAPROGRAMMED?
  * meta.h
- * enum Type {
+ * enum StructMemberType {
  *   type_u32,
  *   type_r32,
  * };
  * 
- * struct Variable {
+ * struct StructMember {
  *   Type type;
  *   char *name;
  *   u32 offset;
  * };
- *
- *"{type_u32(some enum), name, offsetof}" > generated.h
+ 
+  printf("#define META_HANDLE_PRINT_TYPE(member_ptr, indent_level) \\\n")
+  for (structs_parsed)
+  {
+    printf("case: meta_type%s: {dump_struct(indent_level + 1)}",
+    struct->next != NULL ? "\\" : "");
+  }
+
+  StructMember members_of_Name[] = {
+   "{type_u32(some enum), name, offsetof}"
+  } > generated.h
+
+  Instrospectable introspectable;
+  introspectable.name = 10;
+  introspectable.name2 = true;
+  for (u32 intro_i = 0;
+       intro_i < ARRAY_COUNT(members_of_Introspectable);
+       ++intro_i)
+  {
+    switch (variables[intro_i].type) {
+    case some_struct: dump_introspectable_struct(some_struct);
+    (only have to write code for scalars)
+    }
+  }
+
+  void dump_introspectable_struct(StructMember *members, u32 member_count, void *struct);
+
+  
+
+  char text_buffer_base[256];
+  char *text_buffer = text_buffer_base;
+  for (u32 indent = 0;
+       indent < indent_level;
+       ++indent)
+  {
+    *text_buffer++ = ' ';
+    *text_buffer++ = ' ';
+    *text_buffer++ = ' ';
+    *text_buffer++ = ' ';
+  }
+  *text_buffer = '\0';
 */
 
 int
