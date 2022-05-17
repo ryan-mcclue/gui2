@@ -2,50 +2,17 @@
 # SPDX-License-Identifier: zlib-acknowledgement
 set -e
 
+shopt -s extglob dotglob
+
 mkdir -p build
 
-ignored_warning_flags="-Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
-  -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-result
-  -Wno-char-subscripts"
+pushd code
 
-dev_type_flags="-O0 -g -ggdb3 -DGUI_SLOW -DGUI_INTERNAL -DGUI_DEBUGGER"
-# IMPORTANT(Ryan): Are we fine with breaking IEEE floating point (losing precision) for speed?
-#dev_type_flags="-O3 -DGUI_FAST -DGUI_EXTERNAL -ffast-math"
+make
 
-platform_flags="-I$HOME/prog/sources/SDL2-2.0.22/include -D_REENTRANT
--L$HOME/prog/sources/SDL2-2.0.22/build -Wl,-rpath,$HOME/prog/sources/SDL2-2.0.22/build 
--Wl,--enable-new-dtags -pthread"
+mv !(*.[ch]|Makefile) ../build
 
-common_flags="$platform_flags -DGUI_LINUX $ignored_warning_flags -Icode
-  -std=gnu11 -Werror -Wall -Wextra -pedantic -Warray-bounds=2 -march=native"
-  #-ffunction-sections -fdata-sections -Wl,--gc-sections"
-
-: '
-ctime -begin misc/gui.ctm
-
-gcc $common_flags $dev_type_flags \
-  code/platform.c -o build/gui \
-  -lm -lSDL2-2.0 -lSDL2_ttf
-
-read -r -n 1 build_toggle < build/toggle.file
-if [ "$build_toggle" = "1" ]; then
-  toggle_name="gui.so"
-  echo 0 > build/toggle.file
-else
-  toggle_name="gui.so.toggle"
-  echo 1 > build/toggle.file
-fi
-
-gcc $common_flags $dev_type_flags \
-  -fPIC code/gui.c -shared -o run/"$toggle_name" \
-  -lm -lSDL2-2.0 -lSDL2_ttf
-
-ctime -end misc/gui.ctm
-'
-gcc $common_flags $dev_type_flags \
-  $(pkg-config --cflags gio-2.0) \
-  code/bluetooth.c -o build/bluetooth \
-  -lm -lbluetooth $(pkg-config --libs gio-2.0)
+popd
 
 #pushd run
 #../build/connector

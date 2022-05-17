@@ -259,4 +259,3 @@ int main(void)
 
 #endif
 
-// sudo apt install raspberrypi-kernel-headers
