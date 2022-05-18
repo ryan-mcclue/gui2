@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: zlib-acknowledgement
-
-// fping -g -r 1 192.168.0.0/24 2>1 | grep "alive"
-// arp -a
-
 #include "types.h"
 
 #include <sys/types.h>
@@ -40,12 +36,66 @@
   #define ASSERT(cond)
 #endif
 
+typedef struct NameAndMac
+{
+  char *name;
+  char *mac;
+} NameAndMac;
+
+typedef struct ReadEntireCommandResult
+{
+  char *contents;
+  u32 size;
+  u32 len;
+} ReadEntireCommandResult;
+
+INTERNAL ReadEntireCommandResult 
+read_entire_command(char *command_str, u32 buf_size)
+{
+  ReadEntireCommandResult result = {0};
+  result.contents = calloc(1, buf_size);
+  if (result.contents != NULL)
+  {
+    // have to have pclose() to wait for it to finish
+    FILE *command = popen(command_str, "r");
+    if (command != NULL)
+    {
+      while (fread(result.contents
+    }
+    else
+    {
+      EBP();
+    }
+  }
+  else
+  {
+    EBP();
+  }
+
+
+  return result;
+}
+
 int 
 main(int argc, char *argv[])
 {
+  NameAndMac name_and_macs[4] = {0};
+  name_and_macs[0].name = "Ryan";
+  name_and_macs[0].mac = "";
+  name_and_macs[0].name = "Glen";
+  name_and_macs[0].mac = "";
+  name_and_macs[0].name = "Jennifer";
+  name_and_macs[0].mac = "";
+  name_and_macs[0].name = "Lachlan";
+  name_and_macs[0].mac = "";
+
+  // IMPORTANT(Ryan): If serving images, will have to handle their specific GET requests
   char html[1024] = {
     "<h1> Hi There! </h1>"
   };
+
+  ReadCommandResult read_ping_command_result = read_entire_command("fping --generate 192.168.0.0/24 --retry=1 --alive --quiet");
+  ReadCommandResult read_arp_command_result = read_entire_command("arp -n | awk '{ if (NR>1) print $1, $3}'");
 
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd != -1)
