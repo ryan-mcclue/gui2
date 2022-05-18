@@ -1,0 +1,21 @@
+#!/bin/bash
+# SPDX-License-Identifier: zlib-acknowledgement
+set -e
+
+shopt -s extglob dotglob
+
+mkdir -p build
+
+pushd code
+
+make
+
+mv !(*.[ch]|Makefile) ../build
+
+popd
+
+#pushd run
+#../build/connector
+#  dmesg | tail -n 2
+# insmod driver.ko; rmmod driver.ko
+#popd

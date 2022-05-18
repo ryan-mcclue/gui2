@@ -1,5 +1,23 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 
+// gateway --> $(route -n)
+// mac -> $(ip address show)
+// create static ip lease 
+// add in hostname in /etc/hosts (however if DHCP on server, just reconnect to get this?)
+
+// sudo apt install apache2 
+// we have no need for ufw rules
+
+
+// sudo apt install mariadb-server mariadb-client 
+// sudo mysql_secure_installation (remove anonymous users, remote root login, etc.)
+// sudo mariadb
+// GRANT ALL ON *.* TO 'admin'@'localhost' IDENTIFIED BY 'admin' WITH GRANT OPTION;
+// FLUSH PRIVILEGES;
+// (mariadb -u admin -p)
+// sudo chmod 777 -R /var/www
+
+
 // RFCOMM protocol. 
 // Serial Port Profile is based on RFCOMM protocol
 // profile will have a UUID

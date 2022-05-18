@@ -29,10 +29,12 @@ static const struct modversion_info ____versions[]
 __used __section("__versions") = {
 	{ 0xd9726f80, "module_layout" },
 	{ 0xc5850110, "printk" },
+	{ 0xc959d152, "__stack_chk_fail" },
+	{ 0x4102c7cb, "__register_chrdev" },
 	{ 0xbdfb6dbb, "__fentry__" },
 };
 
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "45637CAA6C050A930F7422A");
+MODULE_INFO(srcversion, "98B6F95DC73F1E0AE4A8557");
