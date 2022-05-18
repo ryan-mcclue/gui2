@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <netinet/in.h>
 
@@ -25,14 +26,14 @@
     exit(1);
 #endif
   }
-  #define BP_MSG(msg) __bp(__FILE__, __func__, __LINE__, msg)
-  #define BP() __bp(__FILE__, __func__, __LINE__, "")
-  #define EBP() __ebp(__FILE__, __func__, __LINE__)
+  #define BP_MSG(name, msg) __bp(__FILE__, __func__, __LINE__, msg)
+  #define BP(name) __bp(__FILE__, __func__, __LINE__, "")
+  #define EBP(name) __ebp(__FILE__, __func__, __LINE__)
   #define ASSERT(cond) if (!(cond)) {BP();}
 #else
-  #define BP_MSG(msg)
-  #define BP()
-  #define EBP()
+  #define BP_MSG(name, msg)
+  #define BP(name)
+  #define EBP(name)
   #define ASSERT(cond)
 #endif
 
@@ -45,22 +46,90 @@ typedef struct NameAndMac
 typedef struct ReadEntireCommandResult
 {
   char *contents;
-  u32 size;
   u32 len;
 } ReadEntireCommandResult;
 
 INTERNAL ReadEntireCommandResult 
 read_entire_command(char *command_str, u32 buf_size)
 {
+  int stdout_pair[2] = {0};
+
+  if (pipe(stdout_pair) != -1)
+  {
+    pid_t pid = vfork();
+    if (pid != -1)
+    {
+      if (pid == 0)
+      {
+        dup2(stdout_pair[1], STDOUT_FILENO);
+        // after duplication, no longer require it.
+        // these are local to this process
+        close(stdout_pair[1]);
+        close(stdout_pair[0]);
+
+        execl("/bin/bash", "bash", "-c", command_str, NULL);
+
+        // we should not get here if successful
+        exit(1);
+      }
+
+      wait(NULL);
+
+      // not necessary, could just use read()
+      int res = fdopen(stdout_pair[0], "r");
+
+      close(stdout_pair[0]);
+      close(stdout_pair[1]);
+    }
+    else
+    {
+      EBP("Forking failed");
+    }
+  }
+  else
+  {
+    EBP("Creating pipes failed");
+  }
+  //{
+  //  // perhaps want clone
+  //  int pid = fork();
+  //  if (pid == 0)
+  //  {
+  //    dup2(link[1], STDOUT_FILENO);
+  //    close(link[0]);
+  //    close(link[1]);
+  //    exec();
+  //  }
+  //  else
+  //  {
+  //    wait(NULL); 
+  //    // now read
+  //  }
+  //}
+
+  // if 0, then in child
   ReadEntireCommandResult result = {0};
   result.contents = calloc(1, buf_size);
+
   if (result.contents != NULL)
   {
-    // have to have pclose() to wait for it to finish
     FILE *command = popen(command_str, "r");
     if (command != NULL)
     {
-      while (fread(result.contents
+      u32 total_bytes_read = 0;
+      u8 *contents_ptr = (u8 *)result.contents;
+
+      u32 count = 0;
+      while (fgets(contents_ptr, buf_size - total_bytes_read, command) != NULL)
+      {
+        u32 bytes_read = strlen(contents_ptr);
+        total_bytes_read += bytes_read;
+        contents_ptr += bytes_read;
+      }
+
+      result.len = total_bytes_read;
+
+      pclose(command);
     }
     else
     {
@@ -82,21 +151,28 @@ main(int argc, char *argv[])
   NameAndMac name_and_macs[4] = {0};
   name_and_macs[0].name = "Ryan";
   name_and_macs[0].mac = "";
-  name_and_macs[0].name = "Glen";
-  name_and_macs[0].mac = "";
-  name_and_macs[0].name = "Jennifer";
-  name_and_macs[0].mac = "";
-  name_and_macs[0].name = "Lachlan";
-  name_and_macs[0].mac = "";
+  name_and_macs[1].name = "Glen";
+  name_and_macs[1].mac = "";
+  name_and_macs[2].name = "Jennifer";
+  name_and_macs[2].mac = "";
+  name_and_macs[3].name = "Lachlan";
+  name_and_macs[3].mac = "";
 
   // IMPORTANT(Ryan): If serving images, will have to handle their specific GET requests
   char html[1024] = {
     "<h1> Hi There! </h1>"
   };
 
-  ReadCommandResult read_ping_command_result = read_entire_command("fping --generate 192.168.0.0/24 --retry=1 --alive --quiet");
-  ReadCommandResult read_arp_command_result = read_entire_command("arp -n | awk '{ if (NR>1) print $1, $3}'");
+  //ReadEntireCommandResult read_ping_command_result = \
+  //  read_entire_command("fping --generate 192.168.0.0/24 --retry=1 --alive --quiet", KILOBYTES(2));
 
+  //ReadEntireCommandResult read_arp_command_result = \
+  //  read_entire_command("arp -n | awk '{ if (NR>1) print $1, $3}'", KILOBYTES(2));
+
+  //printf("%s\n", read_ping_command_result.contents);
+  //printf("%s\n", read_arp_command_result.contents);
+
+#if 0
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd != -1)
   {
@@ -151,6 +227,7 @@ main(int argc, char *argv[])
   {
     EBP();
   }
+#endif
 
 
   return 0;
