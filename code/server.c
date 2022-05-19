@@ -59,6 +59,7 @@ read_entire_command(char *command_str)
 
   if (pipe(stdout_pair) != -1)
   {
+    // with forks, can also used shared memory...
     pid_t pid = vfork();
     if (pid != -1)
     {
@@ -123,8 +124,11 @@ main(int argc, char *argv[])
   name_and_macs[3].mac = "";
 
   // IMPORTANT(Ryan): If serving images, will have to handle their specific GET requests
-  char html[1024] = {
-    "<h1> Hi There! </h1>"
+  char html[] = {
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html; charset=UTF-8\r\n\r\n"
+    "<style> body { background-color: #efefef; } </style>\r\n"
+    "<h1> Hi There! </h1>\r\n"
   };
 
   ReadEntireCommandResult read_ping_command_result = \
@@ -161,8 +165,15 @@ main(int argc, char *argv[])
           int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_size);
           if (client_fd != -1)
           {
+            read_from_client();
+            if (client_msg == "GET /favicon.ico")
+            {
+              img = open("favicon.ico");
+              sendfile(client, img, size_of_image);
+            }
+
             char send_buf[2048] = {0};
-            snprintf(send_buf, sizeof(send_buf), "HTTP/1.0 200 OK\r\n\r\n%s", html);
+            snprintf(send_buf, sizeof(send_buf), "%s", html);
 
             write(client_fd, send_buf, sizeof(send_buf));
 
@@ -189,6 +200,33 @@ main(int argc, char *argv[])
   {
     EBP();
   }
+
+GET /tutorials/other/top-20-mysql-best-practices/ HTTP/1.1
+char    *method,    // "GET" or "POST"
+        *uri,       // "/index.html" things before '?'
+        *qs,        // "a=1&b=2"     things after  '?'
+        *prot;      // "HTTP/1.1"
+
+char    *payload;     // for POST
+int      payload_size;
+
+  clients[slot] = accept();
+  if (fork() == 0)
+  {
+    respond(slot);
+    .....
+    buf = malloc(65535);
+    rcvd=recv(clients[n], buf, 65535, 0);
+    parsing.... 
+
+
+    strcmp("/", uri) == 0 && strcmp("GET", method) == 0
+
+    .....
+    exit(0);
+  }
+
+  slot = (slot + 1) % max;
 #endif
 
 
