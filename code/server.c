@@ -43,15 +43,18 @@ typedef struct NameAndMac
   char *mac;
 } NameAndMac;
 
+#define MAX_COMMAND_RESULT_COUNT 4096
 typedef struct ReadEntireCommandResult
 {
-  char *contents;
+  char contents[MAX_COMMAND_RESULT_COUNT];
   u32 len;
 } ReadEntireCommandResult;
 
 INTERNAL ReadEntireCommandResult 
-read_entire_command(char *command_str, u32 buf_size)
+read_entire_command(char *command_str)
 {
+  ReadEntireCommandResult result = {0};
+
   int stdout_pair[2] = {0};
 
   if (pipe(stdout_pair) != -1)
@@ -62,27 +65,37 @@ read_entire_command(char *command_str, u32 buf_size)
       if (pid == 0)
       {
         dup2(stdout_pair[1], STDOUT_FILENO);
-        // after duplication, no longer require it.
-        // these are local to this process
         close(stdout_pair[1]);
         close(stdout_pair[0]);
 
         execl("/bin/bash", "bash", "-c", command_str, NULL);
 
-        // we should not get here if successful
-        exit(1);
+        EBP("Execl failed");
+        exit(127);
       }
+      else
+      {
+        wait(NULL);
 
-      wait(NULL);
+        u32 bytes_read = read(stdout_pair[0], result.contents, MAX_COMMAND_RESULT_COUNT);
+        if (bytes_read != -1)
+        {
+          result.len = bytes_read;
+          result.contents[result.len] = '\0';
+        }
+        else
+        {
+          EBP("Reading from pipe failed");
+        }
 
-      // not necessary, could just use read()
-      int res = fdopen(stdout_pair[0], "r");
-
-      close(stdout_pair[0]);
-      close(stdout_pair[1]);
+        close(stdout_pair[0]);
+        close(stdout_pair[1]);
+      }
     }
     else
     {
+      close(stdout_pair[0]);
+      close(stdout_pair[1]);
       EBP("Forking failed");
     }
   }
@@ -90,57 +103,6 @@ read_entire_command(char *command_str, u32 buf_size)
   {
     EBP("Creating pipes failed");
   }
-  //{
-  //  // perhaps want clone
-  //  int pid = fork();
-  //  if (pid == 0)
-  //  {
-  //    dup2(link[1], STDOUT_FILENO);
-  //    close(link[0]);
-  //    close(link[1]);
-  //    exec();
-  //  }
-  //  else
-  //  {
-  //    wait(NULL); 
-  //    // now read
-  //  }
-  //}
-
-  // if 0, then in child
-  ReadEntireCommandResult result = {0};
-  result.contents = calloc(1, buf_size);
-
-  if (result.contents != NULL)
-  {
-    FILE *command = popen(command_str, "r");
-    if (command != NULL)
-    {
-      u32 total_bytes_read = 0;
-      u8 *contents_ptr = (u8 *)result.contents;
-
-      u32 count = 0;
-      while (fgets(contents_ptr, buf_size - total_bytes_read, command) != NULL)
-      {
-        u32 bytes_read = strlen(contents_ptr);
-        total_bytes_read += bytes_read;
-        contents_ptr += bytes_read;
-      }
-
-      result.len = total_bytes_read;
-
-      pclose(command);
-    }
-    else
-    {
-      EBP();
-    }
-  }
-  else
-  {
-    EBP();
-  }
-
 
   return result;
 }
@@ -150,12 +112,14 @@ main(int argc, char *argv[])
 {
   NameAndMac name_and_macs[4] = {0};
   name_and_macs[0].name = "Ryan";
-  name_and_macs[0].mac = "";
+  name_and_macs[0].mac = "5c:03:39:c5:b8:c9";
   name_and_macs[1].name = "Glen";
   name_and_macs[1].mac = "";
   name_and_macs[2].name = "Jennifer";
   name_and_macs[2].mac = "";
   name_and_macs[3].name = "Lachlan";
+// d8:4c:90:0e:59:da
+// 82:C4:D8:67:64:46
   name_and_macs[3].mac = "";
 
   // IMPORTANT(Ryan): If serving images, will have to handle their specific GET requests
@@ -163,14 +127,12 @@ main(int argc, char *argv[])
     "<h1> Hi There! </h1>"
   };
 
-  //ReadEntireCommandResult read_ping_command_result = \
-  //  read_entire_command("fping --generate 192.168.0.0/24 --retry=1 --alive --quiet", KILOBYTES(2));
+  ReadEntireCommandResult read_ping_command_result = \
+    read_entire_command("fping --generate 192.168.0.0/24 --retry=1 --alive --quiet");
 
-  //ReadEntireCommandResult read_arp_command_result = \
-  //  read_entire_command("arp -n | awk '{ if (NR>1) print $1, $3}'", KILOBYTES(2));
-
-  //printf("%s\n", read_ping_command_result.contents);
-  //printf("%s\n", read_arp_command_result.contents);
+  ReadEntireCommandResult read_arp_command_result = \
+    read_entire_command("arp -n | awk '{ if (NR>1) print $1, $3}'");
+  
 
 #if 0
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
