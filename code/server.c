@@ -232,3 +232,26 @@ int      payload_size;
 
   return 0;
 }
+
+// relay converts low voltage to high?
+// can handle higher currents that a transistor
+
+// extension cable (so has male and female connectors) has ground, netural, high
+// just wire up the high wire to the relay (however mains, so dangerous...)
+
+// optoisolator in effect just a simple transistor?
+void
+route("/")
+{
+  int fd = open("index.html", O_RDONLY);
+  if (fd == -1)
+  {
+    send_404();
+    sizeof("LED1=");
+    atoi(ptr) ? "on" : "off"
+  }
+  else
+  {
+
+  }
+}
