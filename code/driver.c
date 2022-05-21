@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: zlib-acknowledgement
+// vi: tags=/home/ryan/prog/sources/linux/tags
 
 // sudo apt install raspberrypi-kernel-headers
 

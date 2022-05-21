@@ -4,10 +4,29 @@ set -e
 
 mkdir -p build
 
-gcc -g -DGUI_DEBUGGER -DGUI_INTERNAL code/server.c -o build/server
+#compiler="/home/ryan/Downloads/gcc-arm-11.2-2022.02-x86_64-arm-none-linux-gnueabihf/bin/arm-none-linux-gnueabihf-gcc"
+compiler=gcc
+# arm GNU toolchain downloads
 
-#pushd run
-#../build/server
-#  dmesg | tail -n 2
-# insmod driver.ko; rmmod driver.ko
-#popd
+# aarch64 has hardware floating point default
+# armhf is 32bit with hardware floating point
+# although rpi4 is 64bit cpu, the default OS is 32bit (so it will report arm-linux-gnueabih)
+
+# for qemu with linux binary, will require compiling a specific kernel, and with the qemu disk image must have a file system embedded within it
+# qemu-system-x86_64 -kernel bzImage -initrd initrd.img-3.11 -hda /path/to/your/qemu/disk/image -append "root=/dev/sda1"
+
+# alternatively can scp binary over and start a remote debugging session
+
+$compiler -g code/raspi2.c \
+  -o build/raspi2.elf
+
+
+pushd run > /dev/null
+#qemu-system-arm -machine raspi2 -no-reboot -nographic -serial mon:stdio \
+#  -kernel build/raspi2.elf
+# qemu-system-arm -S -gdb tcp::1234 -machine raspi2 -no-reboot -nographic -serial mon:stdio 
+# -kernel build/ras.elf
+#qemu-system-gnuarmeclipse --nographic --no-reboot --board STM32F4-Discovery --mcu STM32F429ZI \
+#    --semihosting-config enable=on,target=native --image ../build/vector.elf 
+# NOTE(Ryan): -serial pty; connect with serial terminal
+popd > /dev/null

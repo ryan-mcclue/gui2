@@ -1,0 +1,13 @@
+#!/bin/bash
+# SPDX-License-Identifier: zlib-acknowledgement
+set -e
+
+mkdir -p build
+
+gcc -g -DGUI_DEBUGGER -DGUI_INTERNAL code/server.c -o build/server
+
+#pushd run
+#../build/server
+#  dmesg | tail -n 2
+# insmod driver.ko; rmmod driver.ko
+#popd
