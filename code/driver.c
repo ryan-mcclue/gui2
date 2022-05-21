@@ -8,6 +8,7 @@
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
 #include <linux/gpio.h>
+#include <linux/delay.h>
 
 #define ZLIB_LICENSE "Proprietary"
 MODULE_LICENSE(ZLIB_LICENSE);
@@ -59,6 +60,8 @@ driver_write(struct file *file, const char *user_buffer, size_t count, loff_t *o
   u32 bytes_not_copied = copy_from_user(&value, user_buffer, to_copy);
   if (value == '0')
   {
+    // IMPORTANT(Ryan): This kernel interface of writing to gpio seems a lot better than
+    // user space?
     gpio_set_value(4, 0);
   }
 
