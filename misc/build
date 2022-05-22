@@ -30,3 +30,15 @@ pushd run > /dev/null
 #    --semihosting-config enable=on,target=native --image ../build/vector.elf 
 # NOTE(Ryan): -serial pty; connect with serial terminal
 popd > /dev/null
+# qemu-system-arm -S -gdb tcp::1234 -machine raspi2 -no-reboot -nographic -serial mon:stdio -kernel build/ras.elf
+# NOTE(Ryan): -serial pty; connect with serial terminal
+
+# IMPORTANT(Ryan): This only works if emulating on the same machine 
+# arm-none-eabi-gdb -q --nh -ex 'file build/ras.elf' -ex 'target remote localhost:1234'
+# IMPORTANT(Ryan): For actual remote debugging, while require compiling on our machine 
+# to get symbol file:
+# TARGET: gdbserver :1234 <program>
+# HOST: ./arm-none-linux-gnueabihf-gdb <program> -q --nh -ex 'target remote raspi2:1234'
+# scp dowhile root@10.x.y.z:/xxxx/yyyy/
+# I found by dpkg -L libpython3.8, I have libpython3.8.so.1.0 in /usr/lib/x86_64-linux-gnu directory. So I went there and did
+# sudo ln -s libpython3.8.so.1.0 libpython3.6m.so.1.0

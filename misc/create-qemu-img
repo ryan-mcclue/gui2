@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+qemu-img create ker.img 1G
+mkfs.ext4 ker.img
+
+mkdir mount-point
+sudo mount ker.img mount-point -t ext4 -o loop
+
+pushd mount-point
+
+sudo mkdir lib64 lib sbin bin etc var dev proc sys run tmp
+
+sudo mknod -m 600 dev/console c 5 1
+sudo mknod -m 666 dev/null c 1 3
+
+popd
+
+sudo umount mount-point

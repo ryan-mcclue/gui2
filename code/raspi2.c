@@ -2,8 +2,6 @@
 
 // os already defines device tree for us to have access
 
-
-
 #include <linux/gpio.h>
 
 int
