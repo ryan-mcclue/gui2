@@ -4,8 +4,11 @@ set -e
 
 mkdir -p build
 
-#compiler="/home/ryan/Downloads/gcc-arm-11.2-2022.02-x86_64-arm-none-linux-gnueabihf/bin/arm-none-linux-gnueabihf-gcc"
-compiler=gcc
+# IMPORTANT(Ryan): We must ensure the version of glibc is same as that on target
+# So, do a gcc --version on target and download the same
+gcc_version="/home/ryan/Downloads/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf"
+compiler="$gcc_version/bin/arm-none-linux-gnueabihf-gcc"
+#compiler=gcc
 # arm GNU toolchain downloads
 
 # aarch64 has hardware floating point default
@@ -17,9 +20,21 @@ compiler=gcc
 
 # alternatively can scp binary over and start a remote debugging session
 
-$compiler -g code/raspi2.c \
-  -o build/raspi2.elf
+# IMPORTANT(Ryan): $(sudo visudo /etc/sudoers) 
+# ryan ALL=(ALL) NOPASSWD:ALL to avoid entering sudo password
 
+# IMPORTANT(Ryan): To prevent entering password over ssh:
+# 1. Copy over ssh public key: ssh-copy-id -i ~/.ssh/id_rsa.pub remote-user@remote-host
+# This will now use ssh password over user password
+# 2. eval $(ssh-agent); ssh-add (may have to sudo chmod 600 key) 
+# This holds our decrypted ssh key in memory
+# However, this has to be run per shell...
+# So, put eval $(keychain --agents ssh --eval id_rsa -q) in .bashrc
+
+$compiler -g code/raspi2.c \
+  -o build/raspi2
+
+scp build/raspi2 ryan@raspi2:/home/ryan/prog/personal/example
 
 pushd run > /dev/null
 #qemu-system-arm -machine raspi2 -no-reboot -nographic -serial mon:stdio \

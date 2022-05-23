@@ -3,10 +3,20 @@
 // os already defines device tree for us to have access
 
 #include <linux/gpio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <string.h>
+#include <stdio.h>
 
 int
 main(int argc, char *argv[])
 {
+  puts("Hello world!");
+#if 0
   // pwm has sysfs interface, as opposed to modern gpio-cdev interface
   // so, ls /sys/class/pwm/pwmchip0 to list things to read/write to
   // echo 0 > /sys/class/pwm/pwmchip0/export (successful if new directory pwm0 created)
@@ -33,6 +43,7 @@ main(int argc, char *argv[])
   data.values[0] = 1;
   ret = ioctl(req.fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data);
   close(f);
+#endif
 
   return 0;
 }

@@ -9,6 +9,18 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
+/*
+ * mosquitto mosquitto-clients
+ * (from package: $(dpkg -S /usr/bin/mosquitto_sub))
+ * mosquitto_sub -t "/some/topic"
+ * mosquitto_pub -t "/some/topic" -m "hello"
+ *
+ * So, individual PLCs will subscribe to topics and then publish confirmation to topics?
+ * (I suppose advantage of this is easier broadcasting?)
+ */
+
+
+
 #if defined(GUI_INTERNAL)
   INTERNAL void __bp(char const *file_name, char const *func_name, int line_num,
                      char const *optional_message)
