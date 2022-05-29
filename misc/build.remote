@@ -1,0 +1,59 @@
+#!/bin/bash
+# SPDX-License-Identifier: zlib-acknowledgement
+set -e
+
+mkdir -p build
+
+# IMPORTANT(Ryan): We must ensure the version of glibc is same as that on target
+# So, do a gcc --version on target and download the same
+gcc_version="/home/ryan/Downloads/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf"
+compiler="$gcc_version/bin/arm-none-linux-gnueabihf-gcc"
+#compiler=gcc
+# arm GNU toolchain downloads
+
+# aarch64 has hardware floating point default
+# armhf is 32bit with hardware floating point
+# although rpi4 is 64bit cpu, the default OS is 32bit (so it will report arm-linux-gnueabih)
+
+# for qemu with linux binary, will require compiling a specific kernel, and with the qemu disk image must have a file system embedded within it
+# qemu-system-x86_64 -kernel bzImage -initrd initrd.img-3.11 -hda /path/to/your/qemu/disk/image -append "root=/dev/sda1"
+
+# alternatively can scp binary over and start a remote debugging session
+
+# IMPORTANT(Ryan): $(sudo visudo /etc/sudoers) 
+# ryan ALL=(ALL) NOPASSWD:ALL to avoid entering sudo password
+
+# IMPORTANT(Ryan): To prevent entering password over ssh:
+# 1. Copy over ssh public key: ssh-copy-id -i ~/.ssh/id_rsa.pub remote-user@remote-host
+# This will now use ssh password over user password
+# 2. eval $(ssh-agent); ssh-add (may have to sudo chmod 600 key) 
+# This holds our decrypted ssh key in memory
+# However, this has to be run per shell...
+# So, put eval $(keychain --agents ssh --eval id_rsa -q) in .bashrc
+
+$compiler -g code/raspi2.c \
+  -o build/raspi2
+
+scp build/raspi2 ryan@raspi2:/home/ryan/prog/personal/example
+
+pushd run > /dev/null
+#qemu-system-arm -machine raspi2 -no-reboot -nographic -serial mon:stdio \
+#  -kernel build/raspi2.elf
+# qemu-system-arm -S -gdb tcp::1234 -machine raspi2 -no-reboot -nographic -serial mon:stdio 
+# -kernel build/ras.elf
+#qemu-system-gnuarmeclipse --nographic --no-reboot --board STM32F4-Discovery --mcu STM32F429ZI \
+#    --semihosting-config enable=on,target=native --image ../build/vector.elf 
+# NOTE(Ryan): -serial pty; connect with serial terminal
+popd > /dev/null
+# qemu-system-arm -S -gdb tcp::1234 -machine raspi2 -no-reboot -nographic -serial mon:stdio -kernel build/ras.elf
+# NOTE(Ryan): -serial pty; connect with serial terminal
+
+# IMPORTANT(Ryan): This only works if emulating on the same machine 
+# arm-none-eabi-gdb -q --nh -ex 'file build/ras.elf' -ex 'target remote localhost:1234'
+# IMPORTANT(Ryan): For actual remote debugging, while require compiling on our machine 
+# to get symbol file:
+# TARGET: gdbserver :1234 <program>
+# HOST: ./arm-none-linux-gnueabihf-gdb <program> -q --nh -ex 'target remote raspi2:1234'
+# scp dowhile root@10.x.y.z:/xxxx/yyyy/
+# I found by dpkg -L libpython3.8, I have libpython3.8.so.1.0 in /usr/lib/x86_64-linux-gnu directory. So I went there and did
+# sudo ln -s libpython3.8.so.1.0 libpython3.6m.so.1.0

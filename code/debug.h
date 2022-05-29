@@ -33,6 +33,9 @@
   #define ASSERT(cond)
 #endif
 
+#define INVALID_CODE_PATH ASSERT(!"InvalidCodePath");
+#define INVALID_DEFAULT_CASE default: { INVALID_CODE_PATH }
+
 typedef struct TimedBlock
 {
   u32 counter;

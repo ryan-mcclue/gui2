@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: zlib-acknowledgement
 
+// amstudio on youtube for making cases etc.
+
 // os already defines device tree for us to have access
 
 #include <linux/gpio.h>
@@ -12,11 +14,20 @@
 #include <string.h>
 #include <stdio.h>
 
+// look in tools/spi/ for example source files
+
 int
 main(int argc, char *argv[])
 {
   puts("Hello world!");
 #if 0
+  // spi is master-slave. no maximum clock speed? (is this for high data rate, hence used in flash?)
+  // 4 wires annoyingly differently named. simplisticly:
+  // MOSI (master output slave input), MISO (master input slave output), 
+  // SCLK (serial clock), SS (slave select)
+  // Seems that userspace SPI api is mainly for test, as we use SPI for speed, so want in kernel
+
+
   // pwm has sysfs interface, as opposed to modern gpio-cdev interface
   // so, ls /sys/class/pwm/pwmchip0 to list things to read/write to
   // echo 0 > /sys/class/pwm/pwmchip0/export (successful if new directory pwm0 created)

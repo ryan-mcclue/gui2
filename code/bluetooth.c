@@ -5,25 +5,16 @@
 // create static ip lease 
 // add in hostname in /etc/hosts (however if DHCP on server, just reconnect to get this?)
 
-// sudo apt install apache2 
-// we have no need for ufw rules
-
-
-// sudo apt install mariadb-server mariadb-client 
-// sudo mysql_secure_installation (remove anonymous users, remote root login, etc.)
-// sudo mariadb
-// GRANT ALL ON *.* TO 'admin'@'localhost' IDENTIFIED BY 'admin' WITH GRANT OPTION;
-// FLUSH PRIVILEGES;
-// (mariadb -u admin -p)
-// sudo chmod 777 -R /var/www
-
-
 // RFCOMM protocol. 
 // Serial Port Profile is based on RFCOMM protocol
 // profile will have a UUID
 //
 // to connect to bluetooth socket, require mac address like AB:12:4B:59:23:0A
 // so, convert from "Connecting to /org/bluez/hci0/dev_5C_03_39_C5_BA_C7"
+
+// L2CAP, MGMT, HCI sockets?
+
+// investigate $(btmon) $(btmgt)
 
 #include "types.h"
 
@@ -146,6 +137,28 @@ on_adapter_changed(GDBusConnection *conn, const gchar *sender_name, const gchar 
 int 
 main(int argc, char *argv[])
 {
+// stackoverflow user: ukBaz
+
+// Classic bluetooth is a constant connection
+
+// BLE transmitter only on if being read or written to
+// subscribe to data changes in GATT database?
+// e.g. GATT keys are 128bit numbers, 95DDA90-251D-470A-A062-FA1922DFA9A8
+// peripheral advertises; central scans and connects
+// also have Beacon (only transmitting) and Observer
+
+// Special interest group has reserved values for official profiles
+// Serial port profile referred to by 0x1101 (in actuality 128bits, just shortened because official)
+
+// async by nature?
+
+// pairing only for secure connection, not necessary
+
+// little-endian except for beacons?
+  
+// dbus service (org.bluez), object path (/org/bluez/hci0)
+
+#if 0
   // print out RSSI https://www.youtube.com/watch?v=W8TQONjd6kw&t=544s
 
   //int bluetooth_fd = obtain_serial_connection("/dev/ttyACM0");
@@ -216,6 +229,7 @@ main(int argc, char *argv[])
   {
     EBP();
   }
+#endif
 
   return 0;
 }

@@ -1,0 +1,16 @@
+#!/bin/bash
+# SPDX-License-Identifier: zlib-acknowledgement
+set -e
+
+mkdir -p build
+
+gcc $common_flags $dev_type_flags \
+  $(pkg-config --cflags gio-2.0) \
+  code/bluetooth.c -o build/bluetooth \
+  -lm -lbluetooth $(pkg-config --libs gio-2.0)
+
+#pushd run
+#../build/server
+#  dmesg | tail -n 2
+# insmod driver.ko; rmmod driver.ko
+#popd
