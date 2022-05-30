@@ -48,6 +48,27 @@ bubble_sort(SortEntry *sort_entries, u32 sort_entry_count)
   }
 }
 
+// multilayered class hierarchy not good for entity system as things share (things are not rigid)
+
+
+// a SOA allows for runtime entity changes by just adding to table
+// struct Entities {
+//   BurnableTable burnables;
+//   HealthTable healths;
+// }
+
+// Inheritence is just putting the parent struct inside the child struct as its first member.
+// In this way, the first element address is same as struct address. 
+// In C++, the compiler does this automatically for us unlike in C where we would have to explicitly mention this member.
+// Now, if how you derive functionality from inheritance you would just inherit from tons of things. 
+// So, when creating an inheritence hierarchy in an OO language, you are just putting things into a giant struct of the things you need.
+// However for C++ to accomodate this, it will have to introduce extra code to handle pointer offsets.
+// A big issue with this (for compiled languages) is that it does not allow for dynamic inheritance.
+
+// Dispatch is I want to associate a function with a memory location. To facilitate we have some data, tell us the function
+
+
+// use this for information containment only, not functionality?
 typedef struct Entry
 {
   ENTRY_TYPE type;
