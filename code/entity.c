@@ -26,6 +26,13 @@ typedef enum
   ENTITY_RESIDENCE_DORMANT,
 } ENTITY_RESIDENCE;
 
+typedef enum
+{
+  ENTITY_TYPE_HERO,
+  ENTITY_TYPE_FAMILIAR,
+  ENTITY_TYPE_MONSTER,
+} ENTITY_TYPE;
+
 // this Entity struct is what is passed around and the specific entity values are modified appropriatley
 typedef struct Entity
 {
@@ -35,6 +42,7 @@ typedef struct Entity
   DormantEntity *dormant_entity;
 } Entity;
 
+// draw_entity(), update_entity()
 typedef struct State
 {
   u32 player_index_for_controller[ARRAY_COUNT(controller)];
@@ -80,7 +88,7 @@ main(int argc, char *argv[])
     {
       if (c->start.down)
       {
-        initialise_player(); // get_entity(dormant_residence); values... ; set_entity_residence(high)
+        initialise_player(); // add_entity(dormant_residence); values... ; set_entity_residence(high)
       }
     }
 
