@@ -65,7 +65,10 @@ bubble_sort(SortEntry *sort_entries, u32 sort_entry_count)
 // However for C++ to accomodate this, it will have to introduce extra code to handle pointer offsets.
 // A big issue with this (for compiled languages) is that it does not allow for dynamic inheritance.
 
-// Dispatch is I want to associate a function with a memory location. To facilitate we have some data, tell us the function
+// Dispatch is I want to associate a function with a memory location, e.g. a glorified function pointer
+// struct Example {
+//   SomeFunction *do;
+// }
 
 
 // use this for information containment only, not functionality?
