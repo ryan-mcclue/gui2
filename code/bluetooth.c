@@ -139,13 +139,29 @@ main(int argc, char *argv[])
 {
 // stackoverflow user: ukBaz
 
-// Classic bluetooth is a constant connection
+// systemctl status bluetooth (determine actual binary from /lib/systemd/system/bluetooth.service, so $(man bluetoothd))
 
-// BLE transmitter only on if being read or written to
+// bluetooth LE was a part of 4.0 specification 
+// used for control signals or sensor data. point-to-point not mesh
+
+// Classic bluetooth requires a connection to send data. used for mice, keyboards, etc.
+// Has fixed set of profiles to use, e.g. serial, audio, etc.
+
+// Does BLE only advertise or can it connect directly?
+// GATT is a hierarchy of data a device exposes (profile -> service -> characteristic (actual data))
+// So when talking to a device, we are really dealing with a particular characteristic of a service
+// So, we say our central looks at a peripherals GATT services that it exposes.
+// We will modify the characteristics of that service
+// There are standard services that we would expect to find
+
+// Interestingly, without extensions, bluetooth has no encryption or authentication so can just connect to any?
+
+// BLE transmitter only on if being read or written to (so it just broadcasts data that others listen to?)
 // subscribe to data changes in GATT database?
-// e.g. GATT keys are 128bit numbers, 95DDA90-251D-470A-A062-FA1922DFA9A8
+// e.g. GATT keys are 128bit UUIDs, 95DDA90-251D-470A-A062-FA1922DFA9A8
 // peripheral advertises; central scans and connects
 // also have Beacon (only transmitting) and Observer
+// can create custom profiles (generic architecture; is this a gatt?)
 
 // Special interest group has reserved values for official profiles
 // Serial port profile referred to by 0x1101 (in actuality 128bits, just shortened because official)

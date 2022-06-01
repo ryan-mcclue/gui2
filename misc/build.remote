@@ -49,10 +49,12 @@ popd > /dev/null
 # NOTE(Ryan): -serial pty; connect with serial terminal
 
 # IMPORTANT(Ryan): This only works if emulating on the same machine 
+# NOTE(Ryan): target extended-remote will not suspend gdb if we exit
 # arm-none-eabi-gdb -q --nh -ex 'file build/ras.elf' -ex 'target remote localhost:1234'
 # IMPORTANT(Ryan): For actual remote debugging, while require compiling on our machine 
 # to get symbol file:
 # TARGET: gdbserver :1234 <program>
+# NOTE(Ryan): Could also use gdb-multiarch
 # HOST: ./arm-none-linux-gnueabihf-gdb <program> -q --nh -ex 'target remote raspi2:1234'
 # scp dowhile root@10.x.y.z:/xxxx/yyyy/
 # I found by dpkg -L libpython3.8, I have libpython3.8.so.1.0 in /usr/lib/x86_64-linux-gnu directory. So I went there and did
