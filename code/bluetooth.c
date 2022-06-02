@@ -139,7 +139,16 @@ main(int argc, char *argv[])
 {
 // stackoverflow user: ukBaz
 
-// systemctl status bluetooth (determine actual binary from /lib/systemd/system/bluetooth.service, so $(man bluetoothd))
+// systemctl status bluetooth (determine actual binary from /lib/systemd/system/bluetooth.service, so $(man bluetoothd). might have to pass --experimental?)
+// $(sudo bluetoothctl; list; show; select; power on;)
+// 'devices' command will list devices found through 'scan on/off'. then do a 'connect' to list peripheral characteristics.
+// Once we are connected, will print out DBUS paths to the characteristics and services we want (or just do 'list-attributes')
+// Now do 'select-attribute <dbus-path>'. Subsequently running 'attribute-info' will give UUID and flags
+// Now could do 'write 0x12 0x23 ...'
+// Finally run 'disconnect'
+// For more informative error information use $(sudo btmgmt)
+// Discover that by default bluetooth is soft blocked by rfkill $(sudo rfkill list), so $(sudo rfkill unblock bluetooth), 
+// $(sudo systemctl restart bluetooth). For some reason this might require $(pulseaudio -k)
 
 // bluetooth LE was a part of 4.0 specification 
 // used for control signals or sensor data. point-to-point not mesh
@@ -151,6 +160,7 @@ main(int argc, char *argv[])
 // GATT is a hierarchy of data a device exposes (profile -> service -> characteristic (actual data))
 // So when talking to a device, we are really dealing with a particular characteristic of a service
 // So, we say our central looks at a peripherals GATT services that it exposes.
+// TODO(Ryan): GATT is a type of service? Other types of services may include 'Tx Power', 'Battery Service'
 // We will modify the characteristics of that service
 // There are standard services that we would expect to find
 
