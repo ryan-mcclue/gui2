@@ -137,13 +137,56 @@ on_adapter_changed(GDBusConnection *conn, const gchar *sender_name, const gchar 
 int 
 main(int argc, char *argv[])
 {
+// FROM BLUETOOTH SIG
+// profile is method of obtaining data from device
+// GATT (Generic Attribute Profile) defines a table of data that lists
+// state and operations that can be performed on them (Attribute Table)
+// service -> characteristic -> optional descriptor  
+// server and client
+
+// GAP (Generic Access Profile) is how devices discover and connect to each other
+// peripheral -> advertises and accepts
+// broadcaster -> advertises
+// observer -> scans and processes
+// central -> scans and connects
+
+// ATT (Attribute Protocol) is how GATT client and server communicate
+
+// HCI is how to interact with bluetooth adapter directly.
+// However, we want BlueZ to handle things like GATT/GAP for us
+
+// Could also be part of a bluetooth mesh network
+
+// Once connected to bus, get name starting with colon, e.g. :1.16 (bluetoothd has well known name org.bluez)
+// Objects (/org/bluez/...) -> interfaces (org.bluez.GattManager1) -> methods
+// Objects also have properties
+// Data returned is in another message
+// interfaces can return signals (unprompted messages)
+
+// A proxy object emulates a remote object, and handles routing for us
+
+// DBus messages also have data types
+
+// Will have to explicitly allow connection to DBus bus in a configuration file
+
+// could use the ELL (embedded linux library for use with DBUS)
+
 // stackoverflow user: ukBaz
+
+// bluefruit examples datamode is server, cmdmode is client
+// ble.print(data) sends data to device
+// ble.available(); ble.read()
+// differences with SPI and UART?
+// services like UART may expose read and write characteristics?
+
 
 // systemctl status bluetooth (determine actual binary from /lib/systemd/system/bluetooth.service, so $(man bluetoothd). might have to pass --experimental?)
 // $(sudo bluetoothctl; list; show; select; power on;)
 // 'devices' command will list devices found through 'scan on/off'. then do a 'connect' to list peripheral characteristics.
-// Once we are connected, will print out DBUS paths to the characteristics and services we want (or just do 'list-attributes')
+// Once we are connected, will print out DBUS paths to the characteristics and services we want 
+// (or just do 'menu gatt' then 'list-attributes <dev>')
 // Now do 'select-attribute <dbus-path>'. Subsequently running 'attribute-info' will give UUID and flags
+// DBUS tree view $(busctl tree org.bluez)
 // Now could do 'write 0x12 0x23 ...'
 // Finally run 'disconnect'
 // For more informative error information use $(sudo btmgmt)
