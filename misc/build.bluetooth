@@ -4,10 +4,13 @@ set -e
 
 mkdir -p build
 
-gcc $common_flags $dev_type_flags \
-  $(pkg-config --cflags gio-2.0) \
+gcc -g -Icode \
   code/bluetooth.c -o build/bluetooth \
-  -lm -lbluetooth $(pkg-config --libs gio-2.0)
+  -lm -lbluetooth -lell
+
+#pushd run
+#../build/bluetooth
+#popd
 
 #pushd run
 #../build/server

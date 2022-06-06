@@ -55,13 +55,13 @@
 #include <fcntl.h>
 #include <termios.h>
 
+#include <signal.h>
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 
-#include <gio/gio.h>
-#include <gio/gnetworking.h>
-#include <glib.h>
+#include <ell/ell.h>
 
 // IMPORTANT(Ryan): may have to "sudo chmod 666 /dev/ttyUSB*" 
 
@@ -101,35 +101,117 @@ obtain_serial_connection(char *path)
   return result;
 }
 
-
-INTERNAL void
-sleep_ms(int ms)
+INTERNAL void 
+proxy_added(struct l_dbus_proxy *proxy, void *user_data)
 {
-  struct timespec sleep_time = {0};
-  sleep_time.tv_nsec = ms * 1000000;
-  struct timespec leftover_sleep_time = {0};
-  nanosleep(&sleep_time, &leftover_sleep_time);
+	const char *interface = l_dbus_proxy_get_interface(proxy);
+	const char *path = l_dbus_proxy_get_path(proxy);
+
+	printf("(PROXY ADDED) Path: %s, Interface: %s\n", path, interface);
+
+	//if (!strcmp(interface, "org.bluez.Adapter1") ||
+	//			!strcmp(interface, "org.bluez.Device1")) {
+	//	char *str;
+
+	//	if (!l_dbus_proxy_get_property(proxy, "Address", "s", &str))
+	//		return;
+
+	//	l_info("   Address: %s", str);
+	//}
 }
 
-#define MAX_BLUETOOTH_DEVICE_COUNT 32
-GLOBAL u32 global_bluetooth_device_count;
-GLOBAL char global_bluetooth_devices[MAX_BLUETOOTH_DEVICE_COUNT][64];
+INTERNAL void 
+proxy_removed(struct l_dbus_proxy *proxy, void *user_data)
+{
+	const char *interface = l_dbus_proxy_get_interface(proxy);
+	const char *path = l_dbus_proxy_get_path(proxy);
+	printf("(PROXY REMOVED) Path: %s, Interface: %s\n", path, interface);
+}
 
 INTERNAL void 
-on_adapter_changed(GDBusConnection *conn, const gchar *sender_name, const gchar *object_path, 
-                   const gchar *interface_name, const gchar *signal_name, GVariant *parameters,
-                   gpointer user_data)
+property_changed(struct l_dbus_proxy *proxy, const char *name,
+				struct l_dbus_message *msg, void *user_data)
 {
-  char *adapter_path = (char *)user_data;
+	const char *interface = l_dbus_proxy_get_interface(proxy);
+	const char *path = l_dbus_proxy_get_path(proxy);
+	printf("(PROPERTY CHANGED) Path: %s, Interface: %s\n", path, interface);
 
-  if (strcmp(object_path, adapter_path) != 0)
+	//if (!strcmp(name, "Address")) {
+	//	char *str;
+
+	//	if (!l_dbus_message_get_arguments(msg, "s", &str)) {
+	//		return;
+	//	}
+
+	//	l_info("   Address: %s", str);
+	//}
+}
+
+INTERNAL void 
+signal_handler(uint32_t signo, void *user_data)
+{
+	switch (signo) {
+	case SIGINT:
+	case SIGTERM:
+		printf("Terminate\n");
+		l_main_quit();
+		break;
+	}
+}
+
+
+// $(d-feet) useful!!!!
+INTERNAL void
+dbus(void)
+{
+  // char *bluez_bus_name = "org.bluez";
+  // NOTE(Ryan): Could iterate over bluetooth adapters, however just use first one here
+  //char *bluetooth_adapter_object = "/org/bluez/hci0";
+
+  if (l_main_init())
   {
-    ASSERT(global_bluetooth_device_count < MAX_BLUETOOTH_DEVICE_COUNT);
-
-    if (strstr(object_path, adapter_path) != NULL)
+    struct l_dbus *dbus_conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+    if (dbus_conn != NULL)
     {
-      // do we need to check for unique devices?
-      strcpy(global_bluetooth_devices[global_bluetooth_device_count++], object_path);
+      const char *service = "org.freedesktop.hostname1";
+      const char *object = "/org/freedesktop/hostname1";
+      const char *interface = "org.freedesktop.DBus.Properties";
+      const char *method = "Get";
+
+      struct l_dbus_message *msg = l_dbus_message_new_method_call(dbus_conn,
+							service, object, interface, method);
+
+      l_dbus_message_set_arguments(msg, "b", prop);
+
+      char *name;
+      if (l_dbus_message_is_error(msg))
+      {
+        l_dbus_get_error(msg, &name, NULL);
+      }
+
+      reply_msg = l_dbus_message_new_method_return(msg);
+
+      // char*, char*, char*
+l_dbus_message_get_arguments(message, "ouq", &path, &passkey, &entered);
+
+      b32 prop;
+      l_dbus_message_get_arguments(msg, "b", prop);
+
+      //b32 want_to_run = true;
+      //int ell_main_loop_timeout = l_main_prepare();
+      //while (want_to_run)
+      //{
+      //  l_main_iterate(ell_main_loop_timeout);
+      //}
+
+	    l_main_run_with_signal(signal_handler, NULL);
+
+      l_dbus_destroy(dbus_conn);
+      l_main_exit();
+    }
+    else
+    {
+      EBP();
     }
   }
 }
@@ -137,6 +219,9 @@ on_adapter_changed(GDBusConnection *conn, const gchar *sender_name, const gchar 
 int 
 main(int argc, char *argv[])
 {
+  dbus();
+// build from Makefile.am: $(autoreconf -f -i; ./configure)
+
 // FROM BLUETOOTH SIG
 // profile is method of obtaining data from device
 // GATT (Generic Attribute Profile) defines a table of data that lists
@@ -159,9 +244,9 @@ main(int argc, char *argv[])
 
 // Once connected to bus, get name starting with colon, e.g. :1.16 (bluetoothd has well known name org.bluez)
 // Objects (/org/bluez/...) -> interfaces (org.bluez.GattManager1) -> methods
-// Objects also have properties
 // Data returned is in another message
 // interfaces can return signals (unprompted messages)
+// interfaces also have properties which are interacted with Get() and Set() methods
 
 // A proxy object emulates a remote object, and handles routing for us
 
