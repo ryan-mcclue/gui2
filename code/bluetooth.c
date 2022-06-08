@@ -55,11 +55,9 @@
 #include <fcntl.h>
 #include <termios.h>
 
-#include <signal.h>
+#include <time.h>
 
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
+#include <signal.h>
 
 #include <ell/ell.h>
 
@@ -182,7 +180,7 @@ parse_array(struct l_dbus_message *reply, void *user_data)
 GLOBAL b32 global_want_to_run = true;
 
 INTERNAL void
-signal_handler(int signum)
+falsify_global_want_to_run(int signum)
 {
   global_want_to_run = false;
 }
@@ -190,32 +188,89 @@ signal_handler(int signum)
 // TODO(Ryan): Proxies are for DBus.Properties? How?
 // Memory managed just will l_free() or also need message_unref()?
 
+#define KILO (1000LL)
+#define MEGA (KILO * 1000LL)
+#define GIGA (MEGA * 1000LL)
+#define TERA (GIGA * 1000LL)
+
+INTERNAL u64
+get_ns(void)
+{
+  u64 result = 0;
+
+  struct timespec cur_timespec = {0}; 
+
+  if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
+  {
+    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (1 * TERA));
+  }
+  else
+  {
+    EBP();
+  }
+
+  return result;
+}
+
+INTERNAL void 
+test_new_signal_callback(struct l_dbus_message *message, void *user_data)
+{
+	const char *interface, *property, *value;
+	struct l_dbus_message_iter variant, changed, invalidated;
+
+	if (!signal_timeout)
+		return;
+
+	test_assert(l_dbus_message_get_arguments(message, "sa{sv}as",
+							&interface, &changed,
+							&invalidated));
+
+	test_assert(l_dbus_message_iter_next_entry(&changed, &property,
+							&variant));
+	test_assert(!strcmp(property, "String"));
+	test_assert(l_dbus_message_iter_get_variant(&variant, "s", &value));
+	test_assert(!strcmp(value, "foo"));
+
+	test_assert(!l_dbus_message_iter_next_entry(&changed, &property,
+							&variant));
+	test_assert(!l_dbus_message_iter_next_entry(&invalidated,
+							&property));
+
+	test_assert(!new_signal_received);
+	new_signal_received = true;
+
+	test_check_signal_success();
+}
+
 // $(d-feet) useful!!!!
 INTERNAL void
 dbus(void)
 {
-  // bluez device discovery more complicated than in android/ios as concurrent use of bluetooth allowed
-  // managed object is created for bluetooth device found by bluez
-  
-  // IMPORTANT(Ryan): Perhaps more elegant to obtain adapter object from GetManagedObjects()
-
   if (l_main_init())
   {
-    // l_dbus_add_signal_watch()
-
     struct l_dbus *dbus_conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
     if (dbus_conn != NULL)
     {
-      signal(SIGINT, signal_handler);
+      signal(SIGINT, falsify_global_want_to_run);
 
       int ell_main_loop_timeout = l_main_prepare();
       while (global_want_to_run)
       {
-        const char *service = "org.freedesktop.hostname1";
-        const char *object = "/org/freedesktop/hostname1";
-        const char *interface = "org.freedesktop.DBus.Properties";
-        const char *method = "Get";
+        const char *service = "org.bluez";
+        // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
+        // However, this is the default in most circumstances 
+        const char *adapter_object = "/org/bluez/hci0";
+        const char *adapter_interface = "org.bluez.Adapter1";
+        const char *start_discovery_method = "StartDiscovery";
+        
+        // NOTE(Ryan): Be notified of advertising packets from unknown devices
+        "org.freedesktop.DBus.ObjectManager"
+        const char *interface = "InterfacesAdded";
+        // This will scan for both classic and le devices?
+        l_dbus_add_signal_watch(dbus_conn, sender, path, interface, L_DBUS_MATCH_NONE,
+            some_cb, NULL);
 
+        // StartDiscovery method
         struct l_dbus_message *msg = \
           l_dbus_message_new_method_call(dbus_conn, service, object, interface, method);
 
@@ -344,79 +399,6 @@ main(int argc, char *argv[])
 // little-endian except for beacons?
   
 // dbus service (org.bluez), object path (/org/bluez/hci0)
-
-#if 0
-  // print out RSSI https://www.youtube.com/watch?v=W8TQONjd6kw&t=544s
-
-  //int bluetooth_fd = obtain_serial_connection("/dev/ttyACM0");
-  //close(bluetooth_fd);
-
-  int adapter_id = hci_get_route(NULL);
-  if (adapter_id >= 0)
-  {
-    struct hci_dev_info hci_info = {0};
-    if (hci_devinfo(adapter_id, &hci_info) >= 0)
-    {
-      char *bus_name = "org.bluez";
-      char *interface_name = "org.bluez.Adapter1";
-      char object_path[256] = {"/org/bluez/"};
-      strcat(object_path, hci_info.name);
-
-      // IMPORTANT(Ryan): May have to be root or alter DBUS permissions to access system bus
-      GError *g_error = NULL;
-      GDBusConnection *dbus_connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &g_error);
-      if (dbus_connection != NULL)
-      {
-        //start_async_device_discovery();
-        // IMPORTANT(Ryan): This will look for both classic and LE
-        // Look into Parthiban gists to filter just LE
-        u32 scan_subscription_id = \
-          g_dbus_connection_signal_subscribe(dbus_connection, "org.bluez",
-                                              "org.freedesktop.DBus.Properties",
-                                              "PropertiesChanged", NULL, NULL,
-                                              G_DBUS_SIGNAL_FLAGS_NONE,
-                                              on_adapter_changed, (void *)object_path, NULL);
-        // method call
-        GVariant *res = g_dbus_connection_call_sync(dbus_connection, bus_name, object_path,
-              interface_name, "StartDiscovery", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
-              -1, NULL, &g_error);
-        g_variant_unref(res);
-
-        u32 seconds_to_scan = 10;
-        printf("Waiting %d seconds\n ...", seconds_to_scan); 
-        sleep_ms(1000 * seconds_to_scan);
-        
-        //stop_async_device_discovery();
-        g_dbus_connection_signal_unsubscribe(dbus_connection, scan_subscription_id);
-        res = g_dbus_connection_call_sync(dbus_connection, bus_name, object_path,
-              interface_name, "StopDiscovery", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
-              -1, NULL, &g_error);
-        g_variant_unref(res);
-        
-        printf("Found ...\n");
-        for (u32 bluetooth_device_i = 0;
-             bluetooth_device_i < global_bluetooth_device_count;
-             ++bluetooth_device_i)
-        {
-          printf("%s\n", global_bluetooth_devices[bluetooth_device_i]);
-        }
-      }
-      else
-      {
-        EBP();
-      }
-
-    }
-    else
-    {
-      EBP();
-    }
-  }
-  else
-  {
-    EBP();
-  }
-#endif
 
   return 0;
 }
