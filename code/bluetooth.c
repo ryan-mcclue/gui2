@@ -159,11 +159,25 @@ signal_handler(uint32_t signo, void *user_data)
 	}
 }
 
+INTERNAL void
+get_hostname_cb(struct l_dbus_message *reply, void *user_data)
+{
+	struct l_dbus_message_iter iter = {0};
+	const char *hostname = NULL;
+
+	l_dbus_message_get_arguments(reply, "v", &iter);
+
+	l_dbus_message_iter_get_variant(&iter, "s", &hostname);
+
+  printf("Hostname: %s\n", hostname);
+}
 
 // $(d-feet) useful!!!!
 INTERNAL void
 dbus(void)
 {
+  // proxies are for DBus.Properties?
+
   // char *bluez_bus_name = "org.bluez";
   // NOTE(Ryan): Could iterate over bluetooth adapters, however just use first one here
   //char *bluetooth_adapter_object = "/org/bluez/hci0";
@@ -180,22 +194,25 @@ dbus(void)
 
       struct l_dbus_message *msg = l_dbus_message_new_method_call(dbus_conn,
 							service, object, interface, method);
+      // "s" const char *
+      // "b" u8
+      // "q" u16
+      // "u" u32
+      // "h" int
+      // "x" u64
+      // "d" double
+      const char *get_interface = "org.freedesktop.hostname1"; 
+      const char *get_property = "Hostname";
+      l_dbus_message_set_arguments(msg, "ss", get_interface, get_property);
 
-      l_dbus_message_set_arguments(msg, "b", prop);
+      l_dbus_send_with_reply(dbus_conn, msg, get_hostname_cb, NULL, NULL);
 
-      char *name;
-      if (l_dbus_message_is_error(msg))
-      {
-        l_dbus_get_error(msg, &name, NULL);
-      }
-
-      reply_msg = l_dbus_message_new_method_return(msg);
-
-      // char*, char*, char*
-l_dbus_message_get_arguments(message, "ouq", &path, &passkey, &entered);
-
-      b32 prop;
-      l_dbus_message_get_arguments(msg, "b", prop);
+      //const char *err_name, *err_text = NULL;
+      //if (l_dbus_message_is_error(reply_msg))
+      //{
+      //  printf("error\n");
+      //  l_dbus_message_get_error(reply_msg, &err_name, &err_text);
+      //}
 
       //b32 want_to_run = true;
       //int ell_main_loop_timeout = l_main_prepare();
@@ -204,6 +221,7 @@ l_dbus_message_get_arguments(message, "ouq", &path, &passkey, &entered);
       //  l_main_iterate(ell_main_loop_timeout);
       //}
 
+      // IMPORTANT(Ryan): Will need to run l_main() at some point to get message replies
 	    l_main_run_with_signal(signal_handler, NULL);
 
       l_dbus_destroy(dbus_conn);
