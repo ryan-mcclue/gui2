@@ -147,18 +147,6 @@ property_changed(struct l_dbus_proxy *proxy, const char *name,
 	//}
 }
 
-INTERNAL void 
-signal_handler(uint32_t signo, void *user_data)
-{
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		printf("Terminate\n");
-		l_main_quit();
-		break;
-	}
-}
-
 INTERNAL void
 get_hostname_cb(struct l_dbus_message *reply, void *user_data)
 {
@@ -170,42 +158,77 @@ get_hostname_cb(struct l_dbus_message *reply, void *user_data)
 	l_dbus_message_iter_get_variant(&iter, "s", &hostname);
 
   printf("Hostname: %s\n", hostname);
+
+  // l_free()
 }
+
+INTERNAL void
+parse_array(struct l_dbus_message *reply, void *user_data)
+{
+	struct l_dbus_message_iter iter = {0};
+	const char *arr = NULL;
+
+  l_dbus_message_get_arguments(reply, "as", &iter);
+
+  b32 elem_recieved = false;
+  do
+  {
+    elem_recieved = l_dbus_message_iter_next_entry(&iter, &arr);
+  } while (elem_recieved);
+
+  // need to l_dbus_message_unref(msg)?
+}
+
+GLOBAL b32 global_want_to_run = true;
+
+INTERNAL void
+signal_handler(int signum)
+{
+  global_want_to_run = false;
+}
+
+// TODO(Ryan): Proxies are for DBus.Properties? How?
+// Memory managed just will l_free() or also need message_unref()?
 
 // $(d-feet) useful!!!!
 INTERNAL void
 dbus(void)
 {
-  // proxies are for DBus.Properties?
-
-  // char *bluez_bus_name = "org.bluez";
-  // NOTE(Ryan): Could iterate over bluetooth adapters, however just use first one here
-  //char *bluetooth_adapter_object = "/org/bluez/hci0";
+  // bluez device discovery more complicated than in android/ios as concurrent use of bluetooth allowed
+  // managed object is created for bluetooth device found by bluez
+  
+  // IMPORTANT(Ryan): Perhaps more elegant to obtain adapter object from GetManagedObjects()
 
   if (l_main_init())
   {
+    // l_dbus_add_signal_watch()
+
     struct l_dbus *dbus_conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
     if (dbus_conn != NULL)
     {
-      const char *service = "org.freedesktop.hostname1";
-      const char *object = "/org/freedesktop/hostname1";
-      const char *interface = "org.freedesktop.DBus.Properties";
-      const char *method = "Get";
+      signal(SIGINT, signal_handler);
 
-      struct l_dbus_message *msg = l_dbus_message_new_method_call(dbus_conn,
-							service, object, interface, method);
-      // "s" const char *
-      // "b" u8
-      // "q" u16
-      // "u" u32
-      // "h" int
-      // "x" u64
-      // "d" double
-      const char *get_interface = "org.freedesktop.hostname1"; 
-      const char *get_property = "Hostname";
-      l_dbus_message_set_arguments(msg, "ss", get_interface, get_property);
+      int ell_main_loop_timeout = l_main_prepare();
+      while (global_want_to_run)
+      {
+        const char *service = "org.freedesktop.hostname1";
+        const char *object = "/org/freedesktop/hostname1";
+        const char *interface = "org.freedesktop.DBus.Properties";
+        const char *method = "Get";
 
-      l_dbus_send_with_reply(dbus_conn, msg, get_hostname_cb, NULL, NULL);
+        struct l_dbus_message *msg = \
+          l_dbus_message_new_method_call(dbus_conn, service, object, interface, method);
+
+        const char *get_interface = "org.freedesktop.hostname1"; 
+        const char *get_property = "Hostname";
+        l_dbus_message_set_arguments(msg, "ss", get_interface, get_property);
+
+        l_dbus_send_with_reply(dbus_conn, msg, get_hostname_cb, NULL, NULL);
+
+        // l_free()
+
+        l_main_iterate(ell_main_loop_timeout);
+      }
 
       //const char *err_name, *err_text = NULL;
       //if (l_dbus_message_is_error(reply_msg))
@@ -214,15 +237,7 @@ dbus(void)
       //  l_dbus_message_get_error(reply_msg, &err_name, &err_text);
       //}
 
-      //b32 want_to_run = true;
-      //int ell_main_loop_timeout = l_main_prepare();
-      //while (want_to_run)
-      //{
-      //  l_main_iterate(ell_main_loop_timeout);
-      //}
-
-      // IMPORTANT(Ryan): Will need to run l_main() at some point to get message replies
-	    l_main_run_with_signal(signal_handler, NULL);
+      printf("Exiting...\n");
 
       l_dbus_destroy(dbus_conn);
       l_main_exit();
