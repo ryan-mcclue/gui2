@@ -213,8 +213,24 @@ get_ns(void)
 }
 
 INTERNAL void 
-test_new_signal_callback(struct l_dbus_message *message, void *user_data)
+interfaces_added_cb(struct l_dbus_message *message, void *user_data)
 {
+  const char *unique_device_path = l_dbus_message_get_path(message);
+
+  // We know is dictionary of variants.
+  // So, print out top-level dictionary keys and progress further...
+
+  // message is a dictionary:
+  // we know Address is first, however order of other items are not fixed
+  // so, iterate over whole dictionary...
+  // we expect "org.bluez.Device1" : {
+  //   "Address": ,
+  //   ....
+  //   "Name": ,
+  //   "RSSI": ,
+  // } 
+  l_dbus_message_get_arguments(message, "a{sv}",);
+
 	const char *interface, *property, *value;
 	struct l_dbus_message_iter variant, changed, invalidated;
 
@@ -242,6 +258,15 @@ test_new_signal_callback(struct l_dbus_message *message, void *user_data)
 	test_check_signal_success();
 }
 
+GLOBAL b32 global_dbus_name_has_been_acquired = false;
+      //l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
+      //                  set_name, NULL);
+INTERNAL void 
+request_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
+{
+  global_dbus_name_has_been_acquired = success ? (queued ? "queued" : "success") : "failed";
+}
+
 // $(d-feet) useful!!!!
 INTERNAL void
 dbus(void)
@@ -256,19 +281,18 @@ dbus(void)
       int ell_main_loop_timeout = l_main_prepare();
       while (global_want_to_run)
       {
+        // NOTE(Ryan): Be notified of advertising packets from unknown devices
+        // This will scan for both classic and le devices?
+        l_dbus_add_signal_watch(dbus_conn, "org.freedesktop.DBus.ObjectManager", 
+                                "/org/bluez/hci0", "InterfacesAdded", L_DBUS_MATCH_NONE, 
+                                interfaces_added_cb, NULL);
+
         const char *service = "org.bluez";
         // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
         // However, this is the default in most circumstances 
         const char *adapter_object = "/org/bluez/hci0";
         const char *adapter_interface = "org.bluez.Adapter1";
         const char *start_discovery_method = "StartDiscovery";
-        
-        // NOTE(Ryan): Be notified of advertising packets from unknown devices
-        "org.freedesktop.DBus.ObjectManager"
-        const char *interface = "InterfacesAdded";
-        // This will scan for both classic and le devices?
-        l_dbus_add_signal_watch(dbus_conn, sender, path, interface, L_DBUS_MATCH_NONE,
-            some_cb, NULL);
 
         // StartDiscovery method
         struct l_dbus_message *msg = \
