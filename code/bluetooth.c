@@ -218,7 +218,7 @@ interfaces_added_cb(struct l_dbus_message *message, void *user_data)
   const char *unique_device_path = l_dbus_message_get_path(message);
 
   // We know is dictionary of variants.
-  // So, print out top-level dictionary keys and progress further...
+  // So, print out top-level dictionary keys and progress further ...
 
   // message is a dictionary:
   // we know Address is first, however order of other items are not fixed
@@ -258,14 +258,14 @@ interfaces_added_cb(struct l_dbus_message *message, void *user_data)
 	test_check_signal_success();
 }
 
-GLOBAL b32 global_dbus_name_has_been_acquired = false;
-      //l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
-      //                  set_name, NULL);
-INTERNAL void 
-request_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
-{
-  global_dbus_name_has_been_acquired = success ? (queued ? "queued" : "success") : "failed";
-}
+//GLOBAL b32 global_dbus_name_has_been_acquired = false;
+//      //l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
+//      //                  set_name, NULL);
+//INTERNAL void 
+//request_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
+//{
+//  global_dbus_name_has_been_acquired = success ? (queued ? "queued" : "success") : "failed";
+//}
 
 // $(d-feet) useful!!!!
 INTERNAL void
@@ -302,6 +302,7 @@ dbus(void)
         const char *get_property = "Hostname";
         l_dbus_message_set_arguments(msg, "ss", get_interface, get_property);
 
+        // this is where an error could occur?
         l_dbus_send_with_reply(dbus_conn, msg, get_hostname_cb, NULL, NULL);
 
         // l_free()
