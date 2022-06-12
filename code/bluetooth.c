@@ -5,18 +5,8 @@
 // create static ip lease 
 // add in hostname in /etc/hosts (however if DHCP on server, just reconnect to get this?)
 
-// RFCOMM protocol. 
-// Serial Port Profile is based on RFCOMM protocol
-// profile will have a UUID
-//
-// to connect to bluetooth socket, require mac address like AB:12:4B:59:23:0A
-// so, convert from "Connecting to /org/bluez/hci0/dev_5C_03_39_C5_BA_C7"
-
-// L2CAP, MGMT, HCI sockets?
-
-// investigate $(btmon) $(btmgt)
-
 #include "types.h"
+#include "bluetooth.h"
 
 #if defined(GUI_INTERNAL)
   INTERNAL void __bp(char const *file_name, char const *func_name, int line_num,
@@ -54,6 +44,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+
 
 #include <time.h>
 
@@ -146,12 +137,28 @@ property_changed(struct l_dbus_proxy *proxy, const char *name,
 }
 
 INTERNAL void
+start_discovery_cb(struct l_dbus_message *reply, void *user_data)
+{
+  printf("StartDiscovery() returned\n");
+
+  const char *err_name, *err_text = NULL;
+  if (l_dbus_message_is_error(reply))
+  {
+    l_dbus_message_get_error(reply, &err_name, &err_text);
+
+    l_free(err_name);
+    l_free(err_text);
+  }
+}
+
+INTERNAL void
 get_hostname_cb(struct l_dbus_message *reply, void *user_data)
 {
 	struct l_dbus_message_iter iter = {0};
 	const char *hostname = NULL;
 
 	l_dbus_message_get_arguments(reply, "v", &iter);
+  printf("Container type: %c ..... ", iter.container_type);
 
 	l_dbus_message_iter_get_variant(&iter, "s", &hostname);
 
@@ -177,6 +184,23 @@ parse_array(struct l_dbus_message *reply, void *user_data)
   // need to l_dbus_message_unref(msg)?
 }
 
+INTERNAL void
+parse_dict(struct l_dbus_message *reply, void *user_data)
+{
+	struct l_dbus_message_iter dict = {0};
+  l_dbus_message_get_arguments(reply, "a{sv}", &dict);
+
+	struct l_dbus_message_iter iter = {0};
+	const char *key = NULL;
+	l_dbus_message_iter_next_entry(&dict, &key, &iter);
+
+  b32 elem_recieved = false;
+  //do
+  //{
+  //  elem_recieved = l_dbus_message_iter_next_entry(&iter, &arr);
+  //} while (elem_recieved);
+}
+
 GLOBAL b32 global_want_to_run = true;
 
 INTERNAL void
@@ -185,13 +209,9 @@ falsify_global_want_to_run(int signum)
   global_want_to_run = false;
 }
 
-// TODO(Ryan): Proxies are for DBus.Properties? How?
-// Memory managed just will l_free() or also need message_unref()?
-
-#define KILO (1000LL)
-#define MEGA (KILO * 1000LL)
-#define GIGA (MEGA * 1000LL)
-#define TERA (GIGA * 1000LL)
+#define SECONDS_MS(sec) (sec * 1000LL)
+#define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
+#define SECONDS_NS(sec) (SECONDS_US(sec) * 1000LL)
 
 INTERNAL u64
 get_ns(void)
@@ -216,9 +236,11 @@ INTERNAL void
 interfaces_added_cb(struct l_dbus_message *message, void *user_data)
 {
   const char *unique_device_path = l_dbus_message_get_path(message);
+  printf("(SIGNAL RECIEVED) %s\n", unique_device_path);
+#if 0
 
   // We know is dictionary of variants.
-  // So, print out top-level dictionary keys and progress further ...
+  // So, print out top-level dictionary keys and progress further...
 
   // message is a dictionary:
   // we know Address is first, however order of other items are not fixed
@@ -229,7 +251,7 @@ interfaces_added_cb(struct l_dbus_message *message, void *user_data)
   //   "Name": ,
   //   "RSSI": ,
   // } 
-  l_dbus_message_get_arguments(message, "a{sv}",);
+  //l_dbus_message_get_arguments(message, "a{sv}",);
 
 	const char *interface, *property, *value;
 	struct l_dbus_message_iter variant, changed, invalidated;
@@ -256,6 +278,7 @@ interfaces_added_cb(struct l_dbus_message *message, void *user_data)
 	new_signal_received = true;
 
 	test_check_signal_success();
+#endif
 }
 
 //GLOBAL b32 global_dbus_name_has_been_acquired = false;
@@ -278,44 +301,32 @@ dbus(void)
     {
       signal(SIGINT, falsify_global_want_to_run);
 
+      // NOTE(Ryan): Be notified of advertising packets from unknown devices
+      // This will scan for both classic and le devices?
+      l_dbus_add_signal_watch(dbus_conn, "org.freedesktop.DBus.ObjectManager", 
+          "org.bluez", "InterfacesAdded", L_DBUS_MATCH_NONE, 
+          _dbus_callback, interfaces_added_callback);
+
+      // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
+      // However, this is the default in most circumstances 
+      DBusMethod start_discovery = create_dbus_method("org.bluez", "/org/bluez/hci0", 
+                                                      "org.bluez.Adapter1", "StartDiscovery",
+                                                      start_discovery_callback);
+      call_dbus_method(dbus_conn, &start_discovery);
+
+      u64 start_ns = get_ns();
+
       int ell_main_loop_timeout = l_main_prepare();
       while (global_want_to_run)
       {
-        // NOTE(Ryan): Be notified of advertising packets from unknown devices
-        // This will scan for both classic and le devices?
-        l_dbus_add_signal_watch(dbus_conn, "org.freedesktop.DBus.ObjectManager", 
-                                "/org/bluez/hci0", "InterfacesAdded", L_DBUS_MATCH_NONE, 
-                                interfaces_added_cb, NULL);
-
-        const char *service = "org.bluez";
-        // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
-        // However, this is the default in most circumstances 
-        const char *adapter_object = "/org/bluez/hci0";
-        const char *adapter_interface = "org.bluez.Adapter1";
-        const char *start_discovery_method = "StartDiscovery";
-
-        // StartDiscovery method
-        struct l_dbus_message *msg = \
-          l_dbus_message_new_method_call(dbus_conn, service, object, interface, method);
-
-        const char *get_interface = "org.freedesktop.hostname1"; 
-        const char *get_property = "Hostname";
-        l_dbus_message_set_arguments(msg, "ss", get_interface, get_property);
-
-        // this is where an error could occur?
-        l_dbus_send_with_reply(dbus_conn, msg, get_hostname_cb, NULL, NULL);
-
-        // l_free()
+        if ((get_ns() - start_ns) >= SECONDS_NS(5))
+        {
+          call_dbus_method(dbus_conn, &stop_discovery);
+          // global_want_to_run = false; inside of callback
+        }
 
         l_main_iterate(ell_main_loop_timeout);
       }
-
-      //const char *err_name, *err_text = NULL;
-      //if (l_dbus_message_is_error(reply_msg))
-      //{
-      //  printf("error\n");
-      //  l_dbus_message_get_error(reply_msg, &err_name, &err_text);
-      //}
 
       printf("Exiting...\n");
 
@@ -366,8 +377,6 @@ main(int argc, char *argv[])
 // DBus messages also have data types
 
 // Will have to explicitly allow connection to DBus bus in a configuration file
-
-// could use the ELL (embedded linux library for use with DBUS)
 
 // stackoverflow user: ukBaz
 
