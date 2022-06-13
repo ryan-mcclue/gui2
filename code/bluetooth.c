@@ -137,21 +137,6 @@ property_changed(struct l_dbus_proxy *proxy, const char *name,
 }
 
 INTERNAL void
-start_discovery_cb(struct l_dbus_message *reply, void *user_data)
-{
-  printf("StartDiscovery() returned\n");
-
-  const char *err_name, *err_text = NULL;
-  if (l_dbus_message_is_error(reply))
-  {
-    l_dbus_message_get_error(reply, &err_name, &err_text);
-
-    l_free(err_name);
-    l_free(err_text);
-  }
-}
-
-INTERNAL void
 get_hostname_cb(struct l_dbus_message *reply, void *user_data)
 {
 	struct l_dbus_message_iter iter = {0};
@@ -233,10 +218,18 @@ get_ns(void)
 }
 
 INTERNAL void 
-interfaces_added_cb(struct l_dbus_message *message, void *user_data)
+interfaces_added_callback(struct l_dbus_message *message, void *user_data)
 {
   const char *unique_device_path = l_dbus_message_get_path(message);
   printf("(SIGNAL RECIEVED) %s\n", unique_device_path);
+
+  struct l_hashmap *hashmap = l_hashmap_string_new();
+
+  if (l_hashmap_insert(hashmap, "something", some_struct))
+  {
+
+  }
+
 #if 0
 
   // We know is dictionary of variants.
@@ -281,16 +274,21 @@ interfaces_added_cb(struct l_dbus_message *message, void *user_data)
 #endif
 }
 
-//GLOBAL b32 global_dbus_name_has_been_acquired = false;
-//      //l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
-//      //                  set_name, NULL);
-//INTERNAL void 
-//request_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
-//{
-//  global_dbus_name_has_been_acquired = success ? (queued ? "queued" : "success") : "failed";
-//}
+INTERNAL void
+stop_discovery_callback(struct l_dbus_message *reply_message)
+{
+  global_want_to_run = false;
+}
 
-// $(d-feet) useful!!!!
+INTERNAL void 
+request_dbus_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
+{
+  if (!success)
+  {
+    BP_MSG("Failed to acquire dbus name"); 
+  }
+}
+
 INTERNAL void
 dbus(void)
 {
@@ -301,18 +299,19 @@ dbus(void)
     {
       signal(SIGINT, falsify_global_want_to_run);
 
-      // NOTE(Ryan): Be notified of advertising packets from unknown devices
-      // This will scan for both classic and le devices?
+      l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
+                          request_dbus_name_callback, NULL);
+
       l_dbus_add_signal_watch(dbus_conn, "org.freedesktop.DBus.ObjectManager", 
           "org.bluez", "InterfacesAdded", L_DBUS_MATCH_NONE, 
-          _dbus_callback, interfaces_added_callback);
+          dbus_callback_wrapper, interfaces_added_callback);
 
       // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
       // However, this is the default in most circumstances 
-      DBusMethod start_discovery = create_dbus_method("org.bluez", "/org/bluez/hci0", 
+      DBusInteract start_discovery = create_dbus_method("org.bluez", "/org/bluez/hci0", 
                                                       "org.bluez.Adapter1", "StartDiscovery",
                                                       start_discovery_callback);
-      call_dbus_method(dbus_conn, &start_discovery);
+      call_dbus_method(&start_discovery);
 
       u64 start_ns = get_ns();
 
@@ -321,10 +320,8 @@ dbus(void)
       {
         if ((get_ns() - start_ns) >= SECONDS_NS(5))
         {
-          call_dbus_method(dbus_conn, &stop_discovery);
-          // global_want_to_run = false; inside of callback
+          call_dbus_method(&stop_discovery);
         }
-
         l_main_iterate(ell_main_loop_timeout);
       }
 
