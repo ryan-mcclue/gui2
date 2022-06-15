@@ -66,7 +66,8 @@ dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
   }
   else
   {
-    (DBusMethod *)user_data->callback(reply_message);
+    dbus_method_callback_t callback = (dbus_method_callback_t)user_data;
+    callback(reply_message);
   }
 }
 
@@ -83,8 +84,8 @@ create_dbus_method(struct l_dbus *connection, char *service, char *object, char 
   strncpy(result.interface, interface, MAX_DBUS_METHOD_STR_LEN);
   strncpy(result.method, method, MAX_DBUS_METHOD_STR_LEN);
 
-  result.msg = l_dbus_message_new_method_call(result.conn, result.service, result.object, 
-                                              result.interface, result.method);
+  result.message = l_dbus_message_new_method_call(result.connection, result.service, result.object, 
+                                                  result.interface, result.method);
 
   result.callback = callback;
 
@@ -97,16 +98,10 @@ call_dbus_method(DBusMethod *method)
   l_dbus_send_with_reply(method->connection, method->message, dbus_callback_wrapper, 
                          method->callback, NULL);
 
-  l_dbus_message_unref(method->msg);
+  l_dbus_message_unref(method->message);
 }
 
-GLOBAL b32 global_want_to_run = true;
 
-INTERNAL void
-falsify_global_want_to_run(int signum)
-{
-  global_want_to_run = false;
-}
 
 #define SECONDS_MS(sec) (sec * 1000LL)
 #define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
@@ -121,7 +116,7 @@ get_ns(void)
 
   if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
   {
-    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (1 * TERA));
+    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (SECONDS_NS(1)));
   }
   else
   {
@@ -131,11 +126,30 @@ get_ns(void)
   return result;
 }
 
+#if 0
 INTERNAL void 
-interfaces_added_callback(struct l_dbus_message *message, void *user_data)
+interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
 {
-  const char *unique_device_path = l_dbus_message_get_path(message);
-  printf("(SIGNAL RECIEVED) %s\n", unique_device_path);
+  const char *error_name = NULL;
+  const char *error_text = NULL;
+
+  if (l_dbus_message_is_error(reply_message))
+  {
+    l_dbus_message_get_error(reply_message, &error_name, &error_text);
+
+    char error_message[128] = {0};
+    snprintf(error_message, sizeof(error_message), "(DBUS ERROR): %s: %s", error_name, 
+             error_text);
+    BP_MSG(error_message);
+
+    l_free(error_name);
+    l_free(error_text);
+  }
+  else
+  {
+    const char *unique_device_path = l_dbus_message_get_path(reply_message);
+    printf("(SIGNAL RECIEVED) %s\n", unique_device_path);
+  }
 
   //struct l_hashmap *hashmap = l_hashmap_string_new();
 
@@ -187,82 +201,88 @@ interfaces_added_callback(struct l_dbus_message *message, void *user_data)
 	test_check_signal_success();
 #endif
 }
+#endif
 
-INTERNAL void
-start_discovery_callback(struct l_dbus_message *reply_message)
-{
-  printf("Starting discovery\n");
+
+static void start_discovery_callback(struct l_dbus_message *reply_message, void *user_data) {
+  printf("start discovery\n");
 }
 
-INTERNAL void
-stop_discovery_callback(struct l_dbus_message *reply_message)
-{
-  global_want_to_run = false;
+static void debug_callback(const char *str, void *user_data) {
+  const char *prefix = user_data;
+  printf("HI THERE: %s%s\n", str, prefix);
 }
 
 INTERNAL void 
-request_dbus_name_callback(struct l_dbus *dbus, bool success, bool queued, void *user_data)
+interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
 {
-  if (!success)
+  const char *path = l_dbus_message_get_path(reply_message);
+  const char *member = l_dbus_message_get_member(reply_message);
+
+  printf("%s: %s \n", path, member);
+
+	struct l_dbus_message_iter root_dict = {0};
+
+	b32 argument_received = false;
+
+	const char *object_path = NULL;
+	argument_received = l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object_path, &root_dict);
+  if (argument_received)
   {
-    BP_MSG("Failed to acquire dbus name"); 
+    printf("%s\n", object_path);
   }
+
+  struct l_dbus_message_iter root_dict_iter = {0};
+  const char *root_dict_key = NULL;
+	argument_received = l_dbus_message_iter_next_entry(&root_dict, &root_dict_key, &root_dict_iter);
+
+  while (argument_received)
+  {
+    // the iter iterates over the values, while the root iterates over the keys
+    printf("%s\n", root_dict_key);
+	  argument_received = l_dbus_message_iter_next_entry(&root_dict, &root_dict_key, &root_dict_iter);
+    if (strcmp(root_dict_key, "org.bluez.Device1") == 0)
+    {
+      // what we're after
+      struct l_dbus_message_iter sub_dict_key = {0};
+      argument_received = l_dbus_message_iter_get_variant(&root_dict_iter, "a{sv}", &sub_dict_key);
+    }
+  }
+
 }
 
-INTERNAL void
-dbus(void)
-{
+int main(int argc, char *argv[]) {
   if (l_main_init())
   {
-    struct l_dbus *dbus_conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
-    if (dbus_conn != NULL)
-    {
-      signal(SIGINT, falsify_global_want_to_run);
+    struct l_dbus *conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 
-      l_dbus_name_acquire(dbus_conn, "my.bluetooth.app", false, false, false, 
-                          request_dbus_name_callback, NULL);
+    //l_dbus_set_debug(conn, debug_callback, "[DBUS] ", NULL);
+    
+    l_dbus_add_signal_watch(conn, "org.bluez", "/", 
+        "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", L_DBUS_MATCH_NONE, 
+        interfaces_added_callback, NULL);
 
-      l_dbus_add_signal_watch(dbus_conn, "org.freedesktop.DBus.ObjectManager", 
-          "org.bluez", "InterfacesAdded", L_DBUS_MATCH_NONE, 
-          dbus_callback_wrapper, interfaces_added_callback);
+    struct l_dbus_message *msg = l_dbus_message_new_method_call(conn, "org.bluez", "/org/bluez/hci0", 
+        "org.bluez.Adapter1", "StartDiscovery");
+    l_dbus_message_set_arguments(msg, "");
 
-      // IMPORTANT(Ryan): More elegant to obtain adapter object from GetManagedObjects()
-      // However, this is the default in most circumstances 
-      DBusMethod start_discovery = create_dbus_method("org.bluez", "/org/bluez/hci0", 
-                                                      "org.bluez.Adapter1", "StartDiscovery",
-                                                      start_discovery_callback);
+    l_dbus_send_with_reply(conn, msg, start_discovery_callback, NULL, NULL);
 
-      DBusMethod stop_discovery = create_dbus_method("org.bluez", "/org/bluez/hci0", 
-                                                     "org.bluez.Adapter1", "StopDiscovery",
-                                                     stop_discovery_callback);
-      call_dbus_method(&start_discovery);
+    //l_dbus_message_unref(msg);
 
-      u64 start_ns = get_ns();
+    int counter = 0;
+    while (true) {
+      //printf("counter: %d\t", counter++);
 
-      int ell_main_loop_timeout = l_main_prepare();
-      while (global_want_to_run)
-      {
-        if ((get_ns() - start_ns) >= SECONDS_NS(5))
-        {
-          call_dbus_method(&stop_discovery);
-        }
-        l_main_iterate(ell_main_loop_timeout);
-      }
-
-      printf("Exiting...\n");
-
-      l_dbus_destroy(dbus_conn);
-      l_main_exit();
+      // Strangely, counter increment still terminates. Perhaps just use timeout = 0?
+      int timeout = l_main_prepare();
+      //printf("timeout: %d\n", timeout);
+      l_main_iterate(timeout);
     }
-    else
-    {
-      EBP();
-    }
+
+    l_dbus_destroy(conn);
+
+    l_main_exit();
   }
-}
 
-int 
-main(int argc, char *argv[])
-{
-  dbus();
 }
