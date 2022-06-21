@@ -210,44 +210,67 @@ static void start_discovery_callback(struct l_dbus_message *reply_message, void 
 
 static void debug_callback(const char *str, void *user_data) {
   const char *prefix = user_data;
-  printf("HI THERE: %s%s\n", str, prefix);
+  printf("%s%s\n", str, prefix);
 }
+
 
 INTERNAL void 
 interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
 {
-  const char *path = l_dbus_message_get_path(reply_message);
-  const char *member = l_dbus_message_get_member(reply_message);
-
-  printf("%s: %s \n", path, member);
-
-	struct l_dbus_message_iter root_dict = {0};
-
-	b32 argument_received = false;
-
-	const char *object_path = NULL;
-	argument_received = l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object_path, &root_dict);
-  if (argument_received)
+  const char *error_name = NULL;
+  const char *error_text = NULL;
+  if (!l_dbus_message_get_error(reply_message, &error_name, &error_text))
   {
-    printf("%s\n", object_path);
-  }
+    const char *member = l_dbus_message_get_member(reply_message);
 
-  struct l_dbus_message_iter root_dict_iter = {0};
-  const char *root_dict_key = NULL;
-	argument_received = l_dbus_message_iter_next_entry(&root_dict, &root_dict_key, &root_dict_iter);
-
-  while (argument_received)
-  {
-    // the iter iterates over the values, while the root iterates over the keys
-    printf("%s\n", root_dict_key);
-	  argument_received = l_dbus_message_iter_next_entry(&root_dict, &root_dict_key, &root_dict_iter);
-    if (strcmp(root_dict_key, "org.bluez.Device1") == 0)
+    struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
+    const char *object = NULL;
+    if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
     {
-      // what we're after
-      struct l_dbus_message_iter sub_dict_key = {0};
-      argument_received = l_dbus_message_iter_get_variant(&root_dict_iter, "a{sv}", &sub_dict_key);
+      const char *root_dict_key = NULL;
+      while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
+      {
+        if (strcmp(root_dict_key, "org.bluez.Device1") == 0)
+        {
+          const char *device_dict_key = NULL;
+          struct l_dbus_message_iter device_dict_values_iter = {0};
+          while (l_dbus_message_iter_next_entry(&root_dict_values_iter, &device_dict_key, &device_dict_values_iter))
+          {
+            if (strcmp(device_dict_key, "Address") == 0)
+            {
+              const char *address = NULL;
+              l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
+            }
+            if (strcmp(device_dict_key, "Alias") == 0)
+            {
+              const char *alias = NULL;
+              l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &alias);
+            }
+            if (strcmp(device_dict_key, "RSSI") == 0)
+            {
+              s16 rssi = 0;
+              l_dbus_message_iter_get_variant(&device_dict_values_iter, "n", &rssi);
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      BP_MSG("InterfacesAdded dict expected but not recieved");
     }
   }
+  else
+  {
+    char error_message[128] = {0};
+    snprintf(error_message, sizeof(error_message), "(DBUS ERROR): %s: %s", error_name, 
+             error_text);
+    BP_MSG(error_message);
+
+    l_free(error_name);
+    l_free(error_text);
+  }
+
 
 }
 
