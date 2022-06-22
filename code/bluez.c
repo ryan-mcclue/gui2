@@ -166,6 +166,8 @@ static void debug_callback(const char *str, void *user_data) {
   printf("%s%s\n", str, prefix);
 }
 
+// IMPORTANT(Ryan): If we want to inspect the type information of a message, use
+// $(sudo dbus-monitor --system)
 
 INTERNAL void 
 interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
@@ -301,8 +303,27 @@ int main(int argc, char *argv[])
       l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
       
       int dbus_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
-          "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", L_DBUS_MATCH_NONE, 
-          dbus_interfaces_added_callback, NULL);
+                                                             "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
+                                                             L_DBUS_MATCH_NONE, dbus_interfaces_added_callback, NULL);
+      // /org/bluez/hci0/dev_2C....
+      // org.bluez.Device1
+      // Connect()
+      // this won't work if device requires pairing or isn't advertising
+      // IMPORTANT: Once connected, the Connected property of the device will be set, as will be seen in device PropertiesChanged
+      // We could check the Connected property prior to attempting a connection using an appropriate Get()
+
+      // "a{oa{sa{sv}}}" 
+
+      /*
+        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+                                "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved", 
+                                L_DBUS_MATCH_NONE, dbus_interfaces_removed_callback, NULL);
+        IMPORTANT: This PropertiesChanged is only during discovery phase
+        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+                                "org.freedesktop.DBus.Properties", "PropertiesChanged", 
+                                L_DBUS_MATCH_NONE, dbus_properties_changed_callback, NULL);
+       */
+
       // IMPORTANT(Ryan): InterfacesRemoved could be called during this discovery time
       if (dbus_interfaces_added_id != 0)
       {
