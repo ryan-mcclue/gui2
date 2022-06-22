@@ -158,55 +158,8 @@ interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
 
   //}
 
-#if 0
-
-  // We know is dictionary of variants.
-  // So, print out top-level dictionary keys and progress further...
-
-  // message is a dictionary:
-  // we know Address is first, however order of other items are not fixed
-  // so, iterate over whole dictionary...
-  // we expect "org.bluez.Device1" : {
-  //   "Address": ,
-  //   ....
-  //   "Name": ,
-  //   "RSSI": ,
-  // } 
-  //l_dbus_message_get_arguments(message, "a{sv}",);
-
-	const char *interface, *property, *value;
-	struct l_dbus_message_iter variant, changed, invalidated;
-
-	if (!signal_timeout)
-		return;
-
-	test_assert(l_dbus_message_get_arguments(message, "sa{sv}as",
-							&interface, &changed,
-							&invalidated));
-
-	test_assert(l_dbus_message_iter_next_entry(&changed, &property,
-							&variant));
-	test_assert(!strcmp(property, "String"));
-	test_assert(l_dbus_message_iter_get_variant(&variant, "s", &value));
-	test_assert(!strcmp(value, "foo"));
-
-	test_assert(!l_dbus_message_iter_next_entry(&changed, &property,
-							&variant));
-	test_assert(!l_dbus_message_iter_next_entry(&invalidated,
-							&property));
-
-	test_assert(!new_signal_received);
-	new_signal_received = true;
-
-	test_check_signal_success();
-#endif
-}
 #endif
 
-
-static void start_discovery_callback(struct l_dbus_message *reply_message, void *user_data) {
-  printf("start discovery\n");
-}
 
 static void debug_callback(const char *str, void *user_data) {
   const char *prefix = user_data;
@@ -241,11 +194,6 @@ interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
               const char *address = NULL;
               l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
             }
-            if (strcmp(device_dict_key, "Alias") == 0)
-            {
-              const char *alias = NULL;
-              l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &alias);
-            }
             if (strcmp(device_dict_key, "RSSI") == 0)
             {
               s16 rssi = 0;
@@ -274,38 +222,137 @@ interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
 
 }
 
-int main(int argc, char *argv[]) {
+  //struct l_hashmap *hashmap = l_hashmap_string_new();
+
+  //if (l_hashmap_insert(hashmap, "something", some_struct))
+  //{
+
+  //}
+
+#define SECONDS_MS(sec) (sec * 1000LL)
+#define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
+#define SECONDS_NS(sec) (SECONDS_US(sec) * 1000LL)
+
+INTERNAL u64
+get_ns(void)
+{
+  u64 result = 0;
+
+  struct timespec cur_timespec = {0}; 
+
+  if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
+  {
+    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (SECONDS_NS(1)));
+  }
+  else
+  {
+    EBP();
+  }
+
+  return result;
+}
+
+
+INTERNAL void 
+dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool queued, void *user_data)
+{
+  if (!success)
+  {
+    BP_MSG("Failed to acquire dbus name"); 
+  }
+}
+
+INTERNAL void 
+dbus_start_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+{
+  printf("Searching for unmanaged bluetooth devices...\n");
+}
+
+INTERNAL void 
+dbus_stop_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+{
+  // printf("Searching for unmanaged bluetooth devices...\n");
+}
+
+GLOBAL b32 global_want_to_run = true;
+
+INTERNAL void
+falsify_global_want_to_run(int signum)
+{
+  global_want_to_run = false;
+}
+
+typedef struct BluetoothDevice
+{
+  char dbus_path[128];
+  char address[128];
+  s32 rssi;
+} BluetoothDevice;
+
+int main(int argc, char *argv[])
+{
   if (l_main_init())
   {
-    struct l_dbus *conn = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+    struct l_dbus *dbus_connection = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+    if (dbus_connection != NULL)
+    {
+      signal(SIGINT, falsify_global_want_to_run);
 
-    //l_dbus_set_debug(conn, debug_callback, "[DBUS] ", NULL);
-    
-    l_dbus_add_signal_watch(conn, "org.bluez", "/", 
-        "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", L_DBUS_MATCH_NONE, 
-        interfaces_added_callback, NULL);
+      l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
+      
+      int dbus_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+          "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", L_DBUS_MATCH_NONE, 
+          dbus_interfaces_added_callback, NULL);
+      // IMPORTANT(Ryan): InterfacesRemoved could be called during this discovery time
+      if (dbus_interfaces_added_id != 0)
+      {
+        l_dbus_remove_signal_watch(dbus_connection, dbus_interfaces_added_id);
+      }
 
-    struct l_dbus_message *msg = l_dbus_message_new_method_call(conn, "org.bluez", "/org/bluez/hci0", 
-        "org.bluez.Adapter1", "StartDiscovery");
-    l_dbus_message_set_arguments(msg, "");
+      struct l_dbus_message *dbus_start_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+                                                                                       "org.bluez.Adapter1", "StartDiscovery");
+      if (dbus_start_discovery_msg != NULL)
+      {
 
-    l_dbus_send_with_reply(conn, msg, start_discovery_callback, NULL, NULL);
+      }
 
-    //l_dbus_message_unref(msg);
+      if (l_dbus_message_set_arguments(dbus_start_discovery_msg, ""))
+      {
+        if (l_dbus_send_with_reply(dbus_connection, dbus_start_discovery_msg, dbus_start_discovery_callback, NULL, NULL) != 0)
+        {
 
-    int counter = 0;
-    while (true) {
-      //printf("counter: %d\t", counter++);
+        }
+      }
 
-      // Strangely, counter increment still terminates. Perhaps just use timeout = 0?
-      int timeout = l_main_prepare();
-      //printf("timeout: %d\n", timeout);
-      l_main_iterate(timeout);
+      u64 start_time = get_ns();
+      u64 discovery_time = SECONDS_NS(5);
+      while (global_want_to_run)
+      {
+        if (get_ns() - start_time >= discovery_time)
+        {
+          struct l_dbus_message *dbus_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+                                                                                          "org.bluez.Adapter1", "StopDiscovery");
+          l_dbus_message_set_arguments(dbus_stop_discovery_msg, "");
+          l_dbus_send_with_reply(dbus_connection, dbus_stop_discovery_msg, dbus_stop_discovery_callback, NULL, NULL);
+        }
+
+        int timeout = l_main_prepare();
+        l_main_iterate(timeout);
+      }
+
+      l_dbus_destroy(dbus_connection);
+      l_main_exit();
+    }
+    else
+    {
+      BP_MSG("Unable to create dbus connection");
+      l_main_exit();
     }
 
-    l_dbus_destroy(conn);
-
-    l_main_exit();
+  }
+  else
+  {
+    BP_MSG("Unable to initialise ELL main loop");
   }
 
 }
