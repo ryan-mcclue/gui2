@@ -291,6 +291,20 @@ typedef struct BluetoothDevice
   s32 rssi;
 } BluetoothDevice;
 
+/*
+ * Do we have to send an intial AT<CR> to have AT commands parsed and sent to us through UART?
+ * AT+ADDR?<CR> 
+ * AT+VERR?<CR>
+ * AT+NAME?<CR> (AT+NAMERYAN)
+ * AT+PASS?<CR> (AT+PASS123456)
+ * AT+ROLE?<CR> (0 for peripheral, 1 for central). AT+ROLE0 to set
+ *
+ * AT+TYPE2<CR> (set bond mode to authorise, i.e. require password and pair to connect)
+ *
+ * AT+UUID?<CR> (service UUID)
+ * AT+CHAR?<CR> (characteristic value)
+ */
+
 int main(int argc, char *argv[])
 {
   if (l_main_init())
