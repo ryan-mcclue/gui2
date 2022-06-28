@@ -11,13 +11,13 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <linux/spi/spidev.h>
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 
-// look in tools/spi/ for example source files
 static void __bp(char const *file_name, char const *func_name, int line_num,
                    char const *optional_message)
 { 
@@ -87,95 +87,182 @@ gpio_example(void)
   }
 }
 
-static void
-pwm_example(void)
+typedef struct PWMFileDescriptors
 {
-  // for this to be present must add to config.txt: 
-  // dtoverlay=pwm,pin=12,func=4 
+  int export;
+  int enable;
+  int period;
+  int duty_cycle;
+  int errno_code;
+} PWMFileDescriptors;
 
-  // check if exists first
-  int pwmchip0_fd = open("/sys/class/pwm/pwmchip0/export", O_WRONLY);
-  // int pwmchip0_unexport_fd = open("/sys/class/pwm/pwmchip0/unexport", O_RDWR);
-  if (pwmchip0_fd >= 0)
+// for this to be present must add to config.txt: 
+// dtoverlay=pwm,pin=12,func=4 
+static PWMFileDescriptors
+pwm0_file_descriptors_init(void)
+{
+  PWMFileDescriptors result = {0};
+
+  result.export = open("/sys/class/pwm/pwmchip0/export", O_WRONLY);
+  if (result.export >= 0)
   {
-    char *pwm_enable = "0";
-    if (write(pwmchip0_fd, pwm_enable, 2) == 2)
+    if ((access("/sys/class/pwm/pwmchip0/pwm0", F_OK) != 0))
     {
-      if (access("/sys/class/pwm/pwmchip0/pwm0", F_OK) == 0)
+      if (write(result.export, "0", 2) == 2)
       {
-        int pwm0_period_fd = open("/sys/class/pwm/pwmchip0/pwm0/period", O_WRONLY);
-        int pwm0_duty_cycle_fd = open("/sys/class/pwm/pwmchip0/pwm0/duty_cycle", O_WRONLY);
-
-        // write 1 for enable, 0 for disable
-        int pwm0_enable_fd = open("/sys/class/pwm/pwmchip0/pwm0/enable", O_WRONLY);
-
-        if (pwm0_period_fd >= 0 && pwm0_duty_cycle_fd >= 0 && pwm0_enable_fd >= 0)
+        if (access("/sys/class/pwm/pwmchip0/pwm0", F_OK) != 0)
         {
-          char period_ns[16] = {};
-          snprintf(period_ns, sizeof(period_ns), "%d", SECONDS_NS(1));
-
-          char duty_cycle_ns[16] = {};
-          snprintf(duty_cycle_ns, sizeof(duty_cycle_ns), "%d", SECONDS_NS(1) * 0.5f);
-
-          ssize_t period_write_status = write(pwm0_period_fd, period_ns, strlen(period_ns));
-          ssize_t duty_cycle_write_status = \
-            write(pwm0_duty_cycle_fd, duty_cycle_ns, strlen(duty_cycle_ns));
-          if (period_write_status == strlen(period_ns) && 
-              duty_cycle_write_status == strlen(duty_cycle_ns))
-          {
-            char *enable = "1";
-            if (write(pwm0_enable_fd, enable, 2) != 2)
-            {
-              EBP();
-            }
-          }
-          else
-          {
-            EBP();
-          }
+          result.errno_code = errno;
+          BP_MSG("Failed to export pwmchip0");
         }
-        else
+      }
+      else
+      {
+        result.errno_code = errno;
+        EBP();
+      }
+    }
+  }
+  else
+  {
+    result.errno_code = errno;
+    EBP();
+  }
+
+  if (result.errno_code == 0)
+  {
+    result.period = open("/sys/class/pwm/pwmchip0/pwm0/period", O_WRONLY);
+    if (result.period >= 0)
+    {
+      result.duty_cycle = open("/sys/class/pwm/pwmchip0/pwm0/duty_cycle", O_WRONLY);
+      if (result.duty_cycle >= 0)
+      {
+        result.enable = open("/sys/class/pwm/pwmchip0/pwm0/enable", O_WRONLY);
+        if (result.enable == -1)
+        {
+          result.errno_code = errno;
+          EBP();
+        }
+      }
+      else
+      {
+        result.errno_code = errno;
+        EBP();
+      }
+
+    }
+    else
+    {
+      result.errno_code = errno;
+      EBP();
+    }
+  }
+
+  return result;
+}
+
+static void
+i2c_example(void)
+{
+
+}
+
+// said spi speed was in kb?
+static void
+spi00_example(void)
+{
+  int spi00_fd = open("/dev/spidev0.0", O_RDWR);
+  if (spi00_fd >= 0)
+  {
+    // spi mode is setting a combination of clock polarity (CPOL; low or high) and 
+    // clock phase (CPHA; leading or trailing edge) to sample data
+    
+    int mode = 0; // CPOL = 0, CPHA = 0
+    // _WR means assign, _RD means return
+    ioctl(spi00_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi00_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+    ioctl(spi00_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+
+    // IMPORTANT(Ryan): Wrap up SPI data transfer in function.
+    // TODO(Ryan): What word size is the most efficient?
+
+    // full-duplex, therefore more wires than I2C
+    char spi00_tx_buf[32] = {0};
+    char spi00_rx_buf[32] = {0};
+    struct spi_ioc_transfer spi00_transfer[32] = {0};
+    for (int buf_count = 0; buf_count < sizeof(spi00_tx_buf); ++buf_count)
+    {
+      spi00_transfer[buf_count].tx_buf = (unsigned long)(spi00_tx_buf + buf_count);
+      spi00_transfer[buf_count].rx_buf = (unsigned long)(spi00_rx_buf + buf_count);
+      spi00_transfer[buf_count].len = num_bytes;  // in this case 1
+      spi00_transfer[buf_count].speed_hz = speed; 
+      spi00_transfer[buf_count].bits_per_word = 8; 
+    }
+
+    ioctl(spi00_fd, SPI_IOC_MESSAGE(sizeof(spi00_tx_buf)), spi00_transfer);
+
+
+    // address lines typically only for I2C as more master slave combinations?
+
+  }
+  else
+  {
+    EBP();
+  }
+}
+
+int
+main(int argc, char *argv[])
+{
+  PWMFileDescriptors pwm0_file_descriptors = pwm0_file_descriptors_init();
+  if (pwm0_file_descriptors.errno_code == 0)
+  {
+    char pwm0_period_str[16] = {};
+    int pwm0_period = SECONDS_NS(1);
+    snprintf(pwm0_period_str, sizeof(pwm0_period_str), "%d", pwm0_period);
+    int pwm0_period_size = strlen(pwm0_period_str);
+
+    char pwm0_duty_cycle_str[16] = {};
+    int pwm0_duty_cycle = pwm0_period * 0.5f;
+    snprintf(pwm0_duty_cycle_str, sizeof(pwm0_duty_cycle_str), "%d", pwm0_duty_cycle);
+    int pwm0_duty_cycle_size = strlen(pwm0_period_str);
+
+    if (write(pwm0_file_descriptors.period, pwm0_period_str, pwm0_period_size) == pwm0_period_size)
+    {
+      if (write(pwm0_file_descriptors.duty_cycle, pwm0_duty_cycle_str, pwm0_duty_cycle_size) ==
+          pwm0_duty_cycle_size)
+      {
+        if (write(pwm0_file_descriptors.enable, "1", 2) != 2)
         {
           EBP();
         }
       }
       else
       {
-        BP_MSG("Failed to activate pwmchip0");
+        EBP();
       }
     }
     else
     {
       EBP();
     }
-  }
-  else
-  {
-    EBP();
-  }
-  // pwm has sysfs interface, as opposed to modern gpio-cdev interface
-  // so, ls /sys/class/pwm/pwmchip0 to list things to read/write to
-  // echo 0 > /sys/class/pwm/pwmchip0/export (successful if new directory pwm0 created)
-  // period, duty cycle set in nanoseconds
-  // echo 1000000 > /sys/class/pwm/pwmchip0/pwm0/period
-  // echo 50000 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
-  // echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
-  
-  // echo 0 > /sys/class/pwm/pwmchip0/unexport
-}
 
-int
-main(int argc, char *argv[])
-{
-  pwm_example();
+  }
+
 #if 0
-  // spi is master-slave. no maximum clock speed? (is this for high data rate, hence used in flash?)
+  // enable SPI kernel driver with $(sudo raspi-config)
+  // So, may have to designate GPIO pin as PWM with dtoverlay, or load kernel driver as with SPI
+  
+  // SPI chip select if pulled low
+  
+  // look in tools/spi/ for example source files
+  // spi is master-slave. no maximum clock speed? 
+  // (is this for high data rate, hence used in flash?)
   // 4 wires annoyingly differently named. simplisticly:
   // MOSI (master output slave input), MISO (master input slave output), 
   // SCLK (serial clock), SS (slave select)
-  // Seems that userspace SPI api is mainly for test, as we use SPI for speed, so want in kernel
-
-
+  // Seems that userspace SPI api is mainly for test, 
+  // as we use SPI for speed, so want in kernel
 
   
 #endif
