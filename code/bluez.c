@@ -117,6 +117,8 @@ dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool qu
 INTERNAL void 
 bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
 {
+  BluetoothDevice *active_bluetooth_device = NULL;
+
   struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
   const char *object = NULL;
   if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
@@ -136,11 +138,22 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
             const char *address = NULL;
             l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
             printf("Found device: %s\n", address);
+            
+            ASSERT(global_bluetooth_device_count != MAX_BLUETOOTH_DEVICES_COUNT);
+            active_bluetooth_device = &global_bluetooth_devices[global_bluetooth_device_count++];
+            strcpy(active_bluetooth_device->dbus_path, object); 
+            strcpy(active_bluetooth_device->address, address); 
+
+            bool bluetooth_device_insert_status = l_hashmap_insert(global_bluetooth_devices_map, address, active_bluetooth_device);
+            ASSERT(bluetooth_device_insert_status);
           }
           if (strcmp(device_dict_key, "RSSI") == 0)
           {
             s16 rssi = 0;
             l_dbus_message_iter_get_variant(&device_dict_values_iter, "n", &rssi);
+
+            ASSERT(active_bluetooth_device != NULL);
+            active_bluetooth_device->rssi = rssi;
           }
         }
       }
@@ -167,7 +180,6 @@ bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
   global_want_to_run = false;
 }
 
-
 INTERNAL void
 falsify_global_want_to_run(int signum)
 {
@@ -180,6 +192,11 @@ typedef struct BluetoothDevice
   char address[128];
   s32 rssi;
 } BluetoothDevice;
+
+GLOBAL struct l_hashmap *global_bluetooth_devices_map = NULL;
+#define MAX_BLUETOOTH_DEVICES_COUNT 16
+GLOBAL BluetoothDevice global_bluetooth_devices[MAX_BLUETOOTH_DEVICES_COUNT];
+GLOBAL u32 global_bluetooth_device_count = 0;
 
 // IMPORTANT(Ryan): If we want to inspect the type information of a message, use
 // $(sudo dbus-monitor --system)
@@ -195,6 +212,9 @@ int main(int argc, char *argv[])
     { 
       __sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
       ASSERTE(prev_signal_handler != SIG_ERR);
+
+      global_bluetooth_devices = l_hashmap_new_string();
+      ASSERT(global_bluetooth_devices != NULL);
 
       // NOTE(Ryan): Cannot acquire name on system bus without altering dbus permissions  
       // l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
