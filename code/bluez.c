@@ -3,7 +3,6 @@
 #include <ell/ell.h>
 
 #include "types.h"
-#include "bluez.h"
 
 #if defined(GUI_INTERNAL)
   INTERNAL void __bp(char const *file_name, char const *func_name, int line_num,
@@ -28,11 +27,13 @@
   #define BP() __bp(__FILE__, __func__, __LINE__, "")
   #define EBP() __ebp(__FILE__, __func__, __LINE__)
   #define ASSERT(cond) if (!(cond)) {BP();}
+  #define ASSERTE(cond) if (!(cond)) {EBP();}
 #else
   #define BP_MSG(msg)
   #define BP()
   #define EBP()
   #define ASSERT(cond)
+  #define ASSERTE(cond)
 #endif
 
 #include <string.h>
@@ -45,6 +46,31 @@
 
 #include <signal.h>
 
+#define SECONDS_MS(sec) (sec * 1000LL)
+#define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
+#define SECONDS_NS(sec) (SECONDS_US(sec) * 1000LL)
+
+INTERNAL u64
+get_ns(void)
+{
+  u64 result = 0;
+
+  struct timespec cur_timespec = {0}; 
+
+  if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
+  {
+    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (SECONDS_NS(1)));
+  }
+  else
+  {
+    EBP();
+  }
+
+  return result;
+}
+
+
+typedef void (dbus_callback_t *)(struct l_dbus_message *msg);
 
 INTERNAL void
 dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
@@ -71,190 +97,6 @@ dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
   }
 }
 
-INTERNAL DBusMethod
-create_dbus_method(struct l_dbus *connection, char *service, char *object, char *interface, 
-                   char *method, dbus_method_callback_t callback)
-{
-  DBusMethod result = {0};
-
-  result.connection = connection;
-
-  strncpy(result.service, service, MAX_DBUS_METHOD_STR_LEN);
-  strncpy(result.object, object, MAX_DBUS_METHOD_STR_LEN);
-  strncpy(result.interface, interface, MAX_DBUS_METHOD_STR_LEN);
-  strncpy(result.method, method, MAX_DBUS_METHOD_STR_LEN);
-
-  result.message = l_dbus_message_new_method_call(result.connection, result.service, result.object, 
-                                                  result.interface, result.method);
-
-  result.callback = callback;
-
-  return result; 
-}
-
-INTERNAL void
-call_dbus_method(DBusMethod *method)
-{
-  l_dbus_send_with_reply(method->connection, method->message, dbus_callback_wrapper, 
-                         method->callback, NULL);
-
-  l_dbus_message_unref(method->message);
-}
-
-
-
-#define SECONDS_MS(sec) (sec * 1000LL)
-#define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
-#define SECONDS_NS(sec) (SECONDS_US(sec) * 1000LL)
-
-INTERNAL u64
-get_ns(void)
-{
-  u64 result = 0;
-
-  struct timespec cur_timespec = {0}; 
-
-  if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
-  {
-    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (SECONDS_NS(1)));
-  }
-  else
-  {
-    EBP();
-  }
-
-  return result;
-}
-
-#if 0
-INTERNAL void 
-interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
-{
-  const char *error_name = NULL;
-  const char *error_text = NULL;
-
-  if (l_dbus_message_is_error(reply_message))
-  {
-    l_dbus_message_get_error(reply_message, &error_name, &error_text);
-
-    char error_message[128] = {0};
-    snprintf(error_message, sizeof(error_message), "(DBUS ERROR): %s: %s", error_name, 
-             error_text);
-    BP_MSG(error_message);
-
-    l_free(error_name);
-    l_free(error_text);
-  }
-  else
-  {
-    const char *unique_device_path = l_dbus_message_get_path(reply_message);
-    printf("(SIGNAL RECIEVED) %s\n", unique_device_path);
-  }
-
-  //struct l_hashmap *hashmap = l_hashmap_string_new();
-
-  //if (l_hashmap_insert(hashmap, "something", some_struct))
-  //{
-
-  //}
-
-#endif
-
-
-static void debug_callback(const char *str, void *user_data) {
-  const char *prefix = user_data;
-  printf("%s%s\n", str, prefix);
-}
-
-// IMPORTANT(Ryan): If we want to inspect the type information of a message, use
-// $(sudo dbus-monitor --system)
-
-INTERNAL void 
-interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
-{
-  const char *error_name = NULL;
-  const char *error_text = NULL;
-  if (!l_dbus_message_get_error(reply_message, &error_name, &error_text))
-  {
-    const char *member = l_dbus_message_get_member(reply_message);
-
-    struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
-    const char *object = NULL;
-    if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
-    {
-      const char *root_dict_key = NULL;
-      while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
-      {
-        if (strcmp(root_dict_key, "org.bluez.Device1") == 0)
-        {
-          const char *device_dict_key = NULL;
-          struct l_dbus_message_iter device_dict_values_iter = {0};
-          while (l_dbus_message_iter_next_entry(&root_dict_values_iter, &device_dict_key, &device_dict_values_iter))
-          {
-            if (strcmp(device_dict_key, "Address") == 0)
-            {
-              const char *address = NULL;
-              l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
-            }
-            if (strcmp(device_dict_key, "RSSI") == 0)
-            {
-              s16 rssi = 0;
-              l_dbus_message_iter_get_variant(&device_dict_values_iter, "n", &rssi);
-            }
-          }
-        }
-      }
-    }
-    else
-    {
-      BP_MSG("InterfacesAdded dict expected but not recieved");
-    }
-  }
-  else
-  {
-    char error_message[128] = {0};
-    snprintf(error_message, sizeof(error_message), "(DBUS ERROR): %s: %s", error_name, 
-             error_text);
-    BP_MSG(error_message);
-
-    l_free(error_name);
-    l_free(error_text);
-  }
-
-
-}
-
-  //struct l_hashmap *hashmap = l_hashmap_string_new();
-
-  //if (l_hashmap_insert(hashmap, "something", some_struct))
-  //{
-
-  //}
-
-#define SECONDS_MS(sec) (sec * 1000LL)
-#define SECONDS_US(sec) (SECONDS_MS(sec) * 1000LL)
-#define SECONDS_NS(sec) (SECONDS_US(sec) * 1000LL)
-
-INTERNAL u64
-get_ns(void)
-{
-  u64 result = 0;
-
-  struct timespec cur_timespec = {0}; 
-
-  if (clock_gettime(CLOCK_MONOTONIC, &cur_timespec) != -1)
-  {
-    result = cur_timespec.tv_nsec + (cur_timespec.tv_sec * (SECONDS_NS(1)));
-  }
-  else
-  {
-    EBP();
-  }
-
-  return result;
-}
-
-
 INTERNAL void 
 dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool queued, void *user_data)
 {
@@ -264,14 +106,51 @@ dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool qu
   }
 }
 
+
 INTERNAL void 
-dbus_start_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+bluez_interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
+{
+  struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
+  const char *object = NULL;
+  if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
+  {
+    const char *root_dict_key = NULL;
+    while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
+    {
+      if (strcmp(root_dict_key, "org.bluez.Device1") == 0)
+      {
+        const char *device_dict_key = NULL;
+        struct l_dbus_message_iter device_dict_values_iter = {0};
+        while (l_dbus_message_iter_next_entry(&root_dict_values_iter, &device_dict_key, &device_dict_values_iter))
+        {
+          if (strcmp(device_dict_key, "Address") == 0)
+          {
+            const char *address = NULL;
+            l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
+          }
+          if (strcmp(device_dict_key, "RSSI") == 0)
+          {
+            s16 rssi = 0;
+            l_dbus_message_iter_get_variant(&device_dict_values_iter, "n", &rssi);
+          }
+        }
+      }
+    }
+  }
+  else
+  {
+    BP_MSG("InterfacesAdded dict expected but not recieved");
+  }
+}
+
+INTERNAL void 
+bluez_start_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
 {
   printf("Searching for unmanaged bluetooth devices...\n");
 }
 
 INTERNAL void 
-dbus_stop_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+bluez_stop_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
 {
   // printf("Searching for unmanaged bluetooth devices...\n");
 }
@@ -305,6 +184,9 @@ typedef struct BluetoothDevice
  * AT+CHAR?<CR> (characteristic value)
  */
 
+// IMPORTANT(Ryan): If we want to inspect the type information of a message, use
+// $(sudo dbus-monitor --system)
+
 int main(int argc, char *argv[])
 {
   if (l_main_init())
@@ -312,52 +194,24 @@ int main(int argc, char *argv[])
     struct l_dbus *dbus_connection = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
     if (dbus_connection != NULL)
     {
-      signal(SIGINT, falsify_global_want_to_run);
+      sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
+      ASSERTE(prev_signal_handler != SIG_ERR);
 
       l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
       
-      int dbus_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+      unsigned int bluez_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
                                                              "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
-                                                             L_DBUS_MATCH_NONE, dbus_interfaces_added_callback, NULL);
-      // /org/bluez/hci0/dev_2C....
-      // org.bluez.Device1
-      // Connect()
-      // this won't work if device requires pairing or isn't advertising
-      // IMPORTANT: Once connected, the Connected property of the device will be set, as will be seen in device PropertiesChanged
-      // We could check the Connected property prior to attempting a connection using an appropriate Get()
+                                                             L_DBUS_MATCH_NONE, dbus_callback_wrapper, bluez_interfaces_added_callback);
+      ASSERT(bluez_interfaces_added_id != 0);
 
-      // "a{oa{sa{sv}}}" 
-
-      /*
-        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
-                                "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved", 
-                                L_DBUS_MATCH_NONE, dbus_interfaces_removed_callback, NULL);
-        IMPORTANT: This PropertiesChanged is only during discovery phase
-        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/org/bluez/hci0", 
-                                "org.freedesktop.DBus.Properties", "PropertiesChanged", 
-                                L_DBUS_MATCH_NONE, dbus_properties_changed_callback, NULL);
-       */
-
-      // IMPORTANT(Ryan): InterfacesRemoved could be called during this discovery time
-      if (dbus_interfaces_added_id != 0)
-      {
-        l_dbus_remove_signal_watch(dbus_connection, dbus_interfaces_added_id);
-      }
-
-      struct l_dbus_message *dbus_start_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+      struct l_dbus_message *bluez_start_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                                                                        "org.bluez.Adapter1", "StartDiscovery");
-      if (dbus_start_discovery_msg != NULL)
-      {
+      ASSERT(bluez_start_discovery_msg != NULL);
 
-      }
+      bool bluez_start_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_start_discovery_msg, "");
+      ASSERT(bluez_start_discovery_msg_set_argument_status);
 
-      if (l_dbus_message_set_arguments(dbus_start_discovery_msg, ""))
-      {
-        if (l_dbus_send_with_reply(dbus_connection, dbus_start_discovery_msg, dbus_start_discovery_callback, NULL, NULL) != 0)
-        {
-
-        }
-      }
+      l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_interfaces_added_callback, NULL);
 
       u64 start_time = get_ns();
       u64 discovery_time = SECONDS_NS(5);
@@ -367,7 +221,9 @@ int main(int argc, char *argv[])
         {
           struct l_dbus_message *dbus_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                                                                           "org.bluez.Adapter1", "StopDiscovery");
+          ASSERT();
           l_dbus_message_set_arguments(dbus_stop_discovery_msg, "");
+          ASSERT();
           l_dbus_send_with_reply(dbus_connection, dbus_stop_discovery_msg, dbus_stop_discovery_callback, NULL, NULL);
         }
 
@@ -391,3 +247,28 @@ int main(int argc, char *argv[])
   }
 
 }
+
+      // /org/bluez/hci0/dev_2C....
+      // org.bluez.Device1
+      // Connect()
+      // this won't work if device requires pairing or isn't advertising
+      // IMPORTANT: Once connected, the Connected property of the device will be set, as will be seen in device PropertiesChanged
+      // We could check the Connected property prior to attempting a connection using an appropriate Get()
+
+      // "a{oa{sa{sv}}}" 
+
+      /*
+        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+                                "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved", 
+                                L_DBUS_MATCH_NONE, dbus_interfaces_removed_callback, NULL);
+        IMPORTANT: This PropertiesChanged is only during discovery phase
+        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+                                "org.freedesktop.DBus.Properties", "PropertiesChanged", 
+                                L_DBUS_MATCH_NONE, dbus_properties_changed_callback, NULL);
+       */
+
+      // IMPORTANT(Ryan): InterfacesRemoved could be called during this discovery time
+      //if (dbus_interfaces_added_id != 0)
+      //{
+      //  l_dbus_remove_signal_watch(dbus_connection, dbus_interfaces_added_id);
+      //}
