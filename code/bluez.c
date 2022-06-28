@@ -70,11 +70,18 @@ get_ns(void)
 }
 
 
-typedef void (dbus_callback_t *)(struct l_dbus_message *msg);
+typedef void (*dbus_callback_t)(struct l_dbus_message *msg);
 
 INTERNAL void
 dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
 {
+  const char *path = l_dbus_message_get_path(reply_message);
+  const char *interface = l_dbus_message_get_interface(reply_message);
+  const char *member = l_dbus_message_get_member(reply_message);
+  const char *destination = l_dbus_message_get_destination(reply_message);
+  const char *sender = l_dbus_message_get_sender(reply_message);
+  const char *signature = l_dbus_message_get_signature(reply_message);
+
   const char *error_name = NULL;
   const char *error_text = NULL;
 
@@ -83,7 +90,7 @@ dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
     l_dbus_message_get_error(reply_message, &error_name, &error_text);
 
     char error_message[128] = {0};
-    snprintf(error_message, sizeof(error_message), "(DBUS ERROR): %s: %s", error_name, 
+    snprintf(error_message, sizeof(error_message), "%s: %s", error_name, 
              error_text);
     BP_MSG(error_message);
 
@@ -92,7 +99,7 @@ dbus_callback_wrapper(struct l_dbus_message *reply_message, void *user_data)
   }
   else
   {
-    dbus_method_callback_t callback = (dbus_method_callback_t)user_data;
+    dbus_callback_t callback = (dbus_callback_t)user_data;
     callback(reply_message);
   }
 }
@@ -108,12 +115,13 @@ dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool qu
 
 
 INTERNAL void 
-bluez_interfaces_added_callback(struct l_dbus_message *reply_message, void *user_data)
+bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
 {
   struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
   const char *object = NULL;
   if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
   {
+    printf("Found device: %s\n", object);
     const char *root_dict_key = NULL;
     while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
     {
@@ -127,6 +135,7 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message, void *user
           {
             const char *address = NULL;
             l_dbus_message_iter_get_variant(&device_dict_values_iter, "s", &address);
+            printf("Found device: %s\n", address);
           }
           if (strcmp(device_dict_key, "RSSI") == 0)
           {
@@ -144,18 +153,20 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message, void *user
 }
 
 INTERNAL void 
-bluez_start_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+bluez_start_discovery_callback(struct l_dbus_message *reply_message)
 {
   printf("Searching for unmanaged bluetooth devices...\n");
 }
 
+GLOBAL b32 global_want_to_run = true;
+
 INTERNAL void 
-bluez_stop_discovery_callback(struct l_dbus_message *reply_message, void *user_data)
+bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
 {
-  // printf("Searching for unmanaged bluetooth devices...\n");
+  printf("Finished searching for unmanaged bluetooth devices...\n");
+  global_want_to_run = false;
 }
 
-GLOBAL b32 global_want_to_run = true;
 
 INTERNAL void
 falsify_global_want_to_run(int signum)
@@ -170,22 +181,10 @@ typedef struct BluetoothDevice
   s32 rssi;
 } BluetoothDevice;
 
-/*
- * Do we have to send an intial AT<CR> to have AT commands parsed and sent to us through UART?
- * AT+ADDR?<CR> 
- * AT+VERR?<CR>
- * AT+NAME?<CR> (AT+NAMERYAN)
- * AT+PASS?<CR> (AT+PASS123456)
- * AT+ROLE?<CR> (0 for peripheral, 1 for central). AT+ROLE0 to set
- *
- * AT+TYPE2<CR> (set bond mode to authorise, i.e. require password and pair to connect)
- *
- * AT+UUID?<CR> (service UUID)
- * AT+CHAR?<CR> (characteristic value)
- */
-
 // IMPORTANT(Ryan): If we want to inspect the type information of a message, use
 // $(sudo dbus-monitor --system)
+
+// IMPORTANT(Ryan): Don't have $(bluetoothctl) open when running application, as it will intercept bluez devices first!!!
 
 int main(int argc, char *argv[])
 {
@@ -193,15 +192,16 @@ int main(int argc, char *argv[])
   {
     struct l_dbus *dbus_connection = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
     if (dbus_connection != NULL)
-    {
-      sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
+    { 
+      __sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
       ASSERTE(prev_signal_handler != SIG_ERR);
 
-      l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
+      // NOTE(Ryan): Cannot acquire name on system bus without altering dbus permissions  
+      // l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
       
       unsigned int bluez_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
-                                                             "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
-                                                             L_DBUS_MATCH_NONE, dbus_callback_wrapper, bluez_interfaces_added_callback);
+                                                                       "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
+                                                                       L_DBUS_MATCH_NONE, dbus_callback_wrapper, bluez_interfaces_added_callback);
       ASSERT(bluez_interfaces_added_id != 0);
 
       struct l_dbus_message *bluez_start_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
       bool bluez_start_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_start_discovery_msg, "");
       ASSERT(bluez_start_discovery_msg_set_argument_status);
 
-      l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_interfaces_added_callback, NULL);
+      l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_start_discovery_callback, NULL);
 
       u64 start_time = get_ns();
       u64 discovery_time = SECONDS_NS(5);
@@ -219,16 +219,19 @@ int main(int argc, char *argv[])
       {
         if (get_ns() - start_time >= discovery_time)
         {
-          struct l_dbus_message *dbus_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+          struct l_dbus_message *bluez_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                                                                           "org.bluez.Adapter1", "StopDiscovery");
-          ASSERT();
-          l_dbus_message_set_arguments(dbus_stop_discovery_msg, "");
-          ASSERT();
-          l_dbus_send_with_reply(dbus_connection, dbus_stop_discovery_msg, dbus_stop_discovery_callback, NULL, NULL);
+          ASSERT(bluez_stop_discovery_msg != NULL);
+
+          bool bluez_stop_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_stop_discovery_msg, "");
+          ASSERT(bluez_stop_discovery_msg_set_argument_status);
+
+          l_dbus_send_with_reply(dbus_connection, bluez_stop_discovery_msg, dbus_callback_wrapper, bluez_stop_discovery_callback, NULL);
         }
 
-        int timeout = l_main_prepare();
-        l_main_iterate(timeout);
+        // NOTE(Ryan): This will hang when no events left, i.e. return -1
+        // int timeout = l_main_prepare();
+        l_main_iterate(0);
       }
 
       l_dbus_destroy(dbus_connection);
@@ -247,6 +250,19 @@ int main(int argc, char *argv[])
   }
 
 }
+
+/*
+ * AT+ADDR?<CR> 
+ * AT+VERR?<CR>
+ * AT+NAME?<CR> (AT+NAMERYAN)
+ * AT+PASS?<CR> (AT+PASS123456)
+ * AT+ROLE?<CR> (0 for peripheral, 1 for central). AT+ROLE0 to set
+ *
+ * AT+TYPE2<CR> (set bond mode to authorise, i.e. require password and pair to connect)
+ *
+ * AT+UUID?<CR> (service UUID)
+ * AT+CHAR?<CR> (characteristic value)
+ */
 
       // /org/bluez/hci0/dev_2C....
       // org.bluez.Device1
