@@ -113,6 +113,20 @@ dbus_request_name_callback(struct l_dbus *dbus_connection, bool success, bool qu
   }
 }
 
+typedef struct BluetoothDevice
+{
+  char dbus_path[128];
+  char address[128];
+  s32 rssi;
+} BluetoothDevice;
+
+GLOBAL b32 global_want_to_run = true;
+
+GLOBAL struct l_hashmap *global_bluetooth_devices_map = NULL;
+#define MAX_BLUETOOTH_DEVICES_COUNT 16
+GLOBAL BluetoothDevice global_bluetooth_devices[MAX_BLUETOOTH_DEVICES_COUNT];
+GLOBAL u32 global_bluetooth_device_count = 0;
+
 
 INTERNAL void 
 bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
@@ -120,10 +134,10 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
   BluetoothDevice *active_bluetooth_device = NULL;
 
   struct l_dbus_message_iter root_dict_keys_iter, root_dict_values_iter = {0};
-  const char *object = NULL;
-  if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &object, &root_dict_keys_iter))
+  const char *dbus_path = NULL;
+  if (l_dbus_message_get_arguments(reply_message, "oa{sa{sv}}", &dbus_path, &root_dict_keys_iter))
   {
-    printf("Found device: %s\n", object);
+    printf("Found device: %s\n", dbus_path);
     const char *root_dict_key = NULL;
     while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
     {
@@ -141,7 +155,7 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
             
             ASSERT(global_bluetooth_device_count != MAX_BLUETOOTH_DEVICES_COUNT);
             active_bluetooth_device = &global_bluetooth_devices[global_bluetooth_device_count++];
-            strcpy(active_bluetooth_device->dbus_path, object); 
+            strcpy(active_bluetooth_device->dbus_path, dbus_path); 
             strcpy(active_bluetooth_device->address, address); 
 
             bool bluetooth_device_insert_status = l_hashmap_insert(global_bluetooth_devices_map, address, active_bluetooth_device);
@@ -171,12 +185,20 @@ bluez_start_discovery_callback(struct l_dbus_message *reply_message)
   printf("Searching for unmanaged bluetooth devices...\n");
 }
 
-GLOBAL b32 global_want_to_run = true;
 
 INTERNAL void 
 bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
 {
-  printf("Finished searching for unmanaged bluetooth devices...\n");
+  printf("Found devices:\n");
+
+  for (u32 device_i = 0;
+       device_i < global_bluetooth_device_count;
+       ++device_i)
+  {
+    BluetoothDevice device = global_bluetooth_devices[device_i];
+    printf("%s:%s (%d)\n", device.dbus_path, device.address, device.rssi);
+  }
+
   global_want_to_run = false;
 }
 
@@ -185,18 +207,6 @@ falsify_global_want_to_run(int signum)
 {
   global_want_to_run = false;
 }
-
-typedef struct BluetoothDevice
-{
-  char dbus_path[128];
-  char address[128];
-  s32 rssi;
-} BluetoothDevice;
-
-GLOBAL struct l_hashmap *global_bluetooth_devices_map = NULL;
-#define MAX_BLUETOOTH_DEVICES_COUNT 16
-GLOBAL BluetoothDevice global_bluetooth_devices[MAX_BLUETOOTH_DEVICES_COUNT];
-GLOBAL u32 global_bluetooth_device_count = 0;
 
 // IMPORTANT(Ryan): If we want to inspect the type information of a message, use
 // $(sudo dbus-monitor --system)
@@ -213,12 +223,13 @@ int main(int argc, char *argv[])
       __sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
       ASSERTE(prev_signal_handler != SIG_ERR);
 
-      global_bluetooth_devices = l_hashmap_new_string();
-      ASSERT(global_bluetooth_devices != NULL);
+      global_bluetooth_devices_map = l_hashmap_string_new();
+      ASSERT(global_bluetooth_devices_map != NULL);
 
       // NOTE(Ryan): Cannot acquire name on system bus without altering dbus permissions  
       // l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
       
+      // TODO(Ryan): Watch for InterfacesRemoved and PropertiesChanged during discovery phase
       unsigned int bluez_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
                                                                        "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
                                                                        L_DBUS_MATCH_NONE, dbus_callback_wrapper, bluez_interfaces_added_callback);
@@ -233,20 +244,40 @@ int main(int argc, char *argv[])
 
       l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_start_discovery_callback, NULL);
 
+      /* already obtained
+      struct l_dbus_message *bluez_get_managed_objects_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/", 
+                                                                                            "org.freedesktop.DBus.ObjectManager", 
+                                                                                            "GetManagedObjects");
+      ASSERT(bluez_get_managed_objects_msg != NULL);
+
+      bool bluez_get_managed_objects_msg_set_argument_status = l_dbus_message_set_arguments(bluez_get_managed_objects_msg, "");
+      ASSERT(bluez_get_managed_objects_msg_set_argument_status);
+
+      l_dbus_send_with_reply(dbus_connection, bluez_get_managed_objects_msg, dbus_callback_wrapper, bluez_get_managed_objects_callback, NULL);
+      */
+
       u64 start_time = get_ns();
       u64 discovery_time = SECONDS_NS(5);
+      b32 are_discovering = true;
       while (global_want_to_run)
       {
-        if (get_ns() - start_time >= discovery_time)
+        if (are_discovering)
         {
-          struct l_dbus_message *bluez_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
-                                                                                          "org.bluez.Adapter1", "StopDiscovery");
-          ASSERT(bluez_stop_discovery_msg != NULL);
+          if (get_ns() - start_time >= discovery_time)
+          {
+            are_discovering = false;
 
-          bool bluez_stop_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_stop_discovery_msg, "");
-          ASSERT(bluez_stop_discovery_msg_set_argument_status);
+            struct l_dbus_message *bluez_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+                                                                                            "org.bluez.Adapter1", "StopDiscovery");
+            ASSERT(bluez_stop_discovery_msg != NULL);
 
-          l_dbus_send_with_reply(dbus_connection, bluez_stop_discovery_msg, dbus_callback_wrapper, bluez_stop_discovery_callback, NULL);
+            bool bluez_stop_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_stop_discovery_msg, "");
+            ASSERT(bluez_stop_discovery_msg_set_argument_status);
+
+            l_dbus_send_with_reply(dbus_connection, bluez_stop_discovery_msg, dbus_callback_wrapper, bluez_stop_discovery_callback, NULL);
+
+            l_dbus_remove_signal_watch(dbus_connection, bluez_interfaces_added_id);
+          }
         }
 
         // NOTE(Ryan): This will hang when no events left, i.e. return -1
