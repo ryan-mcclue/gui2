@@ -171,6 +171,18 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
           }
         }
       }
+      else if (strcmp(root_dict_key, "org.bluez.GattService1") == 0)
+      {
+        // UUID
+      }
+      else if (strcmp(root_dict_key, "org.bluez.GattCharacteristic1") == 0)
+      {
+        // UUID and Flags
+      }
+      else if (strcmp(root_dict_key, "org.bluez.GattDescriptor1") == 0)
+      {
+        // UUID
+      }
     }
   }
   else
@@ -185,6 +197,11 @@ bluez_start_discovery_callback(struct l_dbus_message *reply_message)
   printf("Searching for unmanaged bluetooth devices...\n");
 }
 
+INTERNAL void
+bluez_connect_callback(struct l_dbus_message *reply_message)
+{
+}
+
 
 INTERNAL void 
 bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
@@ -195,14 +212,14 @@ bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
   if (device != NULL)
   {
     // TODO(Ryan): Ensure connection successful by looking at Connected property
-    struct l_dbus_message *bluez_connect_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", device->dbus_path, 
-                                                                              "org.bluez.Device1", "Connect");
-    ASSERT(bluez_connect_msg != NULL);
+    //struct l_dbus_message *bluez_connect_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", device->dbus_path, 
+    //                                                                          "org.bluez.Device1", "Connect");
+    //ASSERT(bluez_connect_msg != NULL);
 
-    bool bluez_connect_msg_set_argument_status = l_dbus_message_set_arguments(bluez_connect_msg, "");
-    ASSERT(bluez_connect_msg_set_argument_status);
+    //bool bluez_connect_msg_set_argument_status = l_dbus_message_set_arguments(bluez_connect_msg, "");
+    //ASSERT(bluez_connect_msg_set_argument_status);
 
-    l_dbus_send_with_reply(dbus_connection, bluez_connect_msg, dbus_callback_wrapper, bluez_connect_callback, NULL);
+    //l_dbus_send_with_reply(dbus_connection, bluez_connect_msg, dbus_callback_wrapper, bluez_connect_callback, NULL);
   }
   else
   {
@@ -363,6 +380,41 @@ int main(int argc, char *argv[])
 }
 
 /*
+ *
+UUID_NAMES = {
+    "00001801-0000-1000-8000-00805f9b34fb" : "Generic Attribute Service",
+    "0000180a-0000-1000-8000-00805f9b34fb" : "Device Information Service",
+    "e95d93b0-251d-470a-a062-fa1922dfa9a8" : "DFU Control Service",
+    "e95d93af-251d-470a-a062-fa1922dfa9a8" : "Event Service",
+    "e95d9882-251d-470a-a062-fa1922dfa9a8" : "Button Service",
+    "e95d6100-251d-470a-a062-fa1922dfa9a8" : "Temperature Service",
+    "e95dd91d-251d-470a-a062-fa1922dfa9a8" : "LED Service",
+    "00002a05-0000-1000-8000-00805f9b34fb" : "Service Changed",
+    "e95d93b1-251d-470a-a062-fa1922dfa9a8" : "DFU Control",
+    "00002a05-0000-1000-8000-00805f9b34fb" : "Service Changed",
+    "00002a24-0000-1000-8000-00805f9b34fb" : "Model Number String",
+    "00002a25-0000-1000-8000-00805f9b34fb" : "Serial Number String",
+    "00002a26-0000-1000-8000-00805f9b34fb" : "Firmware Revision String",
+    "e95d9775-251d-470a-a062-fa1922dfa9a8" : "micro:bit Event",
+    "e95d5404-251d-470a-a062-fa1922dfa9a8" : "Client Event",
+    "e95d23c4-251d-470a-a062-fa1922dfa9a8" : "Client Requirements",
+    "e95db84c-251d-470a-a062-fa1922dfa9a8" : "micro:bit Requirements",
+    "e95dda90-251d-470a-a062-fa1922dfa9a8" : "Button A State",
+    "e95dda91-251d-470a-a062-fa1922dfa9a8" : "Button B State",
+    "e95d9250-251d-470a-a062-fa1922dfa9a8" : "Temperature",
+    "e95d93ee-251d-470a-a062-fa1922dfa9a8" : "LED Text",
+    "00002902-0000-1000-8000-00805f9b34fb" : "Client Characteristic Configuration",
+}    
+
+DEVICE_INF_SVC_UUID = "0000180a-0000-1000-8000-00805f9b34fb"
+MODEL_NUMBER_UUID    = "00002a24-0000-1000-8000-00805f9b34fb"
+
+TEMPERATURE_SVC_UUID = "e95d6100-251d-470a-a062-fa1922dfa9a8"
+TEMPERATURE_CHR_UUID = "e95d9250-251d-470a-a062-fa1922dfa9a8"
+
+LED_SVC_UUID = "e95dd91d-251d-470a-a062-fa1922dfa9a8"
+LED_TEXT_CHR_UUID = "e95d93ee-251d-470a-a062-fa1922dfa9a8"
+ *
  * AT+ADDR?<CR> 
  * AT+VERR?<CR>
  * AT+NAME?<CR> (AT+NAMERYAN)
