@@ -196,11 +196,59 @@ bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
        ++device_i)
   {
     BluetoothDevice device = global_bluetooth_devices[device_i];
-    printf("%s:%s (%d)\n", device.dbus_path, device.address, device.rssi);
+    printf("%s\n%s (%d)\n", device.dbus_path, device.address, device.rssi);
   }
 
   global_want_to_run = false;
 }
+
+INTERNAL void
+bluez_get_managed_objects_callback(struct l_dbus_message *reply_message)
+{
+  struct l_dbus_message_iter root_dict_keys_iter = {0}, root_dict_values_iter = {0};
+  if (l_dbus_message_get_arguments(reply_message, "a{oa{sa{sv}}}", &root_dict_keys_iter))
+  {
+    const char *root_dict_key = NULL;
+    while (l_dbus_message_iter_next_entry(&root_dict_keys_iter, &root_dict_key, &root_dict_values_iter))
+    {
+      // IMPORTANT(Ryan): Our device: /org/bluez/hci0, remote device: /org/bluez/hci0/dev_*
+      if (strncmp(root_dict_key, "/org/bluez/hci0/", sizeof("/org/bluez/hci0/") - 1) == 0)
+      {
+        const char *objects_dict_key = NULL;
+        struct l_dbus_message_iter objects_dict_values_iter = {0};
+        while (l_dbus_message_iter_next_entry(&root_dict_values_iter, &objects_dict_key, &objects_dict_values_iter))
+        {
+          if (strcmp(objects_dict_key, "org.bluez.Device1") == 0)
+          {
+            const char *properties_dict_key = NULL;
+            struct l_dbus_message_iter properties_dict_values_iter = {0};
+            while (l_dbus_message_iter_next_entry(&objects_dict_values_iter, &properties_dict_key, &properties_dict_values_iter))
+            {
+              if (strcmp(properties_dict_key, "Address") == 0)
+              {
+                const char *address = NULL;
+                l_dbus_message_iter_get_variant(&properties_dict_values_iter, "s", &address);
+
+                ASSERT(global_bluetooth_device_count != MAX_BLUETOOTH_DEVICES_COUNT);
+                BluetoothDevice *bluetooth_device = &global_bluetooth_devices[global_bluetooth_device_count++];
+                strcpy(bluetooth_device->dbus_path, root_dict_key); 
+                strcpy(bluetooth_device->address, address); 
+
+                bool bluetooth_device_insert_status = l_hashmap_insert(global_bluetooth_devices_map, address, bluetooth_device);
+                ASSERT(bluetooth_device_insert_status);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  else
+  {
+    BP_MSG("GetManagedObjects dict expected but not recieved");
+  }
+}
+
 
 INTERNAL void
 falsify_global_want_to_run(int signum)
@@ -244,7 +292,7 @@ int main(int argc, char *argv[])
 
       l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_start_discovery_callback, NULL);
 
-      /* already obtained
+
       struct l_dbus_message *bluez_get_managed_objects_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/", 
                                                                                             "org.freedesktop.DBus.ObjectManager", 
                                                                                             "GetManagedObjects");
@@ -254,7 +302,7 @@ int main(int argc, char *argv[])
       ASSERT(bluez_get_managed_objects_msg_set_argument_status);
 
       l_dbus_send_with_reply(dbus_connection, bluez_get_managed_objects_msg, dbus_callback_wrapper, bluez_get_managed_objects_callback, NULL);
-      */
+
 
       u64 start_time = get_ns();
       u64 discovery_time = SECONDS_NS(5);
