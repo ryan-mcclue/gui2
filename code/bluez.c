@@ -191,12 +191,22 @@ bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
 {
   printf("Found devices:\n");
 
-  for (u32 device_i = 0;
-       device_i < global_bluetooth_device_count;
-       ++device_i)
+  BluetoothDevice *device = l_hashmap_lookup(global_bluetooth_devices_map, "E4:15:F6:5F:FA:9D");
+  if (device != NULL)
   {
-    BluetoothDevice device = global_bluetooth_devices[device_i];
-    printf("%s\n%s (%d)\n", device.dbus_path, device.address, device.rssi);
+    // TODO(Ryan): Ensure connection successful by looking at Connected property
+    struct l_dbus_message *bluez_connect_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", device->dbus_path, 
+                                                                              "org.bluez.Device1", "Connect");
+    ASSERT(bluez_connect_msg != NULL);
+
+    bool bluez_connect_msg_set_argument_status = l_dbus_message_set_arguments(bluez_connect_msg, "");
+    ASSERT(bluez_connect_msg_set_argument_status);
+
+    l_dbus_send_with_reply(dbus_connection, bluez_connect_msg, dbus_callback_wrapper, bluez_connect_callback, NULL);
+  }
+  else
+  {
+    printf("HMSoft not found!\n");
   }
 
   global_want_to_run = false;
@@ -260,6 +270,8 @@ falsify_global_want_to_run(int signum)
 // $(sudo dbus-monitor --system)
 
 // IMPORTANT(Ryan): Don't have $(bluetoothctl) open when running application, as it will intercept bluez devices first!!!
+
+// IMPORTANT(Ryan): $(usermod -a -G dialout ryan) to get access to serial port
 
 int main(int argc, char *argv[])
 {
@@ -361,16 +373,13 @@ int main(int argc, char *argv[])
  *
  * AT+UUID?<CR> (service UUID)
  * AT+CHAR?<CR> (characteristic value)
+ *
+ * So, if just reading bytes from TX/RX this is the default characteristic, i.e. can only have 1 characteristic on HM-10?
  */
 
-      // /org/bluez/hci0/dev_2C....
-      // org.bluez.Device1
-      // Connect()
       // this won't work if device requires pairing or isn't advertising
       // IMPORTANT: Once connected, the Connected property of the device will be set, as will be seen in device PropertiesChanged
       // We could check the Connected property prior to attempting a connection using an appropriate Get()
-
-      // "a{oa{sa{sv}}}" 
 
       /*
         l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
