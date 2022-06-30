@@ -127,6 +127,8 @@ GLOBAL struct l_hashmap *global_bluetooth_devices_map = NULL;
 GLOBAL BluetoothDevice global_bluetooth_devices[MAX_BLUETOOTH_DEVICES_COUNT];
 GLOBAL u32 global_bluetooth_device_count = 0;
 
+GLOBAL struct l_dbus *global_dbus_connection = NULL;
+
 
 INTERNAL void 
 bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
@@ -173,7 +175,20 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
       }
       else if (strcmp(root_dict_key, "org.bluez.GattService1") == 0)
       {
-        // UUID
+        const char *service_dict_key = NULL;
+        struct l_dbus_message_iter service_dict_values_iter = {0};
+        while (l_dbus_message_iter_next_entry(&root_dict_values_iter, &service_dict_key, &service_dict_values_iter))
+        {
+// SIG UUIDs --> 0000xxxx-0000-1000-8000-00805f9b34fb (https://www.bluetooth.com/specifications/assigned-numbers/)
+// 0x2a05 --> 00002a05-0000-1000-8000-00805f9b34fb
+// 0x1801 -- > 00001801-0000-1000-8000-00805f9b34fb
+          // probably want dbus path as well
+          if (strcmp(service_dict_key, "UUID") == 0)
+          {
+            
+          }
+          // TODO(Ryan): ServicesResolved when done
+        }
       }
       else if (strcmp(root_dict_key, "org.bluez.GattCharacteristic1") == 0)
       {
@@ -212,14 +227,14 @@ bluez_stop_discovery_callback(struct l_dbus_message *reply_message)
   if (device != NULL)
   {
     // TODO(Ryan): Ensure connection successful by looking at Connected property
-    //struct l_dbus_message *bluez_connect_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", device->dbus_path, 
-    //                                                                          "org.bluez.Device1", "Connect");
-    //ASSERT(bluez_connect_msg != NULL);
+    struct l_dbus_message *bluez_connect_msg = l_dbus_message_new_method_call(global_dbus_connection, "org.bluez", device->dbus_path, 
+                                                                              "org.bluez.Device1", "Connect");
+    ASSERT(bluez_connect_msg != NULL);
 
-    //bool bluez_connect_msg_set_argument_status = l_dbus_message_set_arguments(bluez_connect_msg, "");
-    //ASSERT(bluez_connect_msg_set_argument_status);
+    bool bluez_connect_msg_set_argument_status = l_dbus_message_set_arguments(bluez_connect_msg, "");
+    ASSERT(bluez_connect_msg_set_argument_status);
 
-    //l_dbus_send_with_reply(dbus_connection, bluez_connect_msg, dbus_callback_wrapper, bluez_connect_callback, NULL);
+    l_dbus_send_with_reply(global_dbus_connection, bluez_connect_msg, dbus_callback_wrapper, bluez_connect_callback, NULL);
   }
   else
   {
@@ -294,8 +309,8 @@ int main(int argc, char *argv[])
 {
   if (l_main_init())
   {
-    struct l_dbus *dbus_connection = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
-    if (dbus_connection != NULL)
+    global_dbus_connection = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+    if (global_dbus_connection != NULL)
     { 
       __sighandler_t prev_signal_handler = signal(SIGINT, falsify_global_want_to_run);
       ASSERTE(prev_signal_handler != SIG_ERR);
@@ -304,25 +319,25 @@ int main(int argc, char *argv[])
       ASSERT(global_bluetooth_devices_map != NULL);
 
       // NOTE(Ryan): Cannot acquire name on system bus without altering dbus permissions  
-      // l_dbus_name_acquire(dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
+      // l_dbus_name_acquire(global_dbus_connection, "my.bluetooth.app", false, false, false, dbus_request_name_callback, NULL);
       
       // TODO(Ryan): Watch for InterfacesRemoved and PropertiesChanged during discovery phase
-      unsigned int bluez_interfaces_added_id = l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+      unsigned int bluez_interfaces_added_id = l_dbus_add_signal_watch(global_dbus_connection, "org.bluez", "/", 
                                                                        "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
                                                                        L_DBUS_MATCH_NONE, dbus_callback_wrapper, bluez_interfaces_added_callback);
       ASSERT(bluez_interfaces_added_id != 0);
 
-      struct l_dbus_message *bluez_start_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+      struct l_dbus_message *bluez_start_discovery_msg = l_dbus_message_new_method_call(global_dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                                                                        "org.bluez.Adapter1", "StartDiscovery");
       ASSERT(bluez_start_discovery_msg != NULL);
 
       bool bluez_start_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_start_discovery_msg, "");
       ASSERT(bluez_start_discovery_msg_set_argument_status);
 
-      l_dbus_send_with_reply(dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_start_discovery_callback, NULL);
+      l_dbus_send_with_reply(global_dbus_connection, bluez_start_discovery_msg, dbus_callback_wrapper, bluez_start_discovery_callback, NULL);
 
 
-      struct l_dbus_message *bluez_get_managed_objects_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/", 
+      struct l_dbus_message *bluez_get_managed_objects_msg = l_dbus_message_new_method_call(global_dbus_connection, "org.bluez", "/", 
                                                                                             "org.freedesktop.DBus.ObjectManager", 
                                                                                             "GetManagedObjects");
       ASSERT(bluez_get_managed_objects_msg != NULL);
@@ -330,7 +345,7 @@ int main(int argc, char *argv[])
       bool bluez_get_managed_objects_msg_set_argument_status = l_dbus_message_set_arguments(bluez_get_managed_objects_msg, "");
       ASSERT(bluez_get_managed_objects_msg_set_argument_status);
 
-      l_dbus_send_with_reply(dbus_connection, bluez_get_managed_objects_msg, dbus_callback_wrapper, bluez_get_managed_objects_callback, NULL);
+      l_dbus_send_with_reply(global_dbus_connection, bluez_get_managed_objects_msg, dbus_callback_wrapper, bluez_get_managed_objects_callback, NULL);
 
 
       u64 start_time = get_ns();
@@ -344,16 +359,16 @@ int main(int argc, char *argv[])
           {
             are_discovering = false;
 
-            struct l_dbus_message *bluez_stop_discovery_msg = l_dbus_message_new_method_call(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+            struct l_dbus_message *bluez_stop_discovery_msg = l_dbus_message_new_method_call(global_dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                                                                             "org.bluez.Adapter1", "StopDiscovery");
             ASSERT(bluez_stop_discovery_msg != NULL);
 
             bool bluez_stop_discovery_msg_set_argument_status = l_dbus_message_set_arguments(bluez_stop_discovery_msg, "");
             ASSERT(bluez_stop_discovery_msg_set_argument_status);
 
-            l_dbus_send_with_reply(dbus_connection, bluez_stop_discovery_msg, dbus_callback_wrapper, bluez_stop_discovery_callback, NULL);
+            l_dbus_send_with_reply(global_dbus_connection, bluez_stop_discovery_msg, dbus_callback_wrapper, bluez_stop_discovery_callback, NULL);
 
-            l_dbus_remove_signal_watch(dbus_connection, bluez_interfaces_added_id);
+            l_dbus_remove_signal_watch(global_dbus_connection, bluez_interfaces_added_id);
           }
         }
 
@@ -362,7 +377,7 @@ int main(int argc, char *argv[])
         l_main_iterate(0);
       }
 
-      l_dbus_destroy(dbus_connection);
+      l_dbus_destroy(global_dbus_connection);
       l_main_exit();
     }
     else
@@ -415,18 +430,26 @@ TEMPERATURE_CHR_UUID = "e95d9250-251d-470a-a062-fa1922dfa9a8"
 LED_SVC_UUID = "e95dd91d-251d-470a-a062-fa1922dfa9a8"
 LED_TEXT_CHR_UUID = "e95d93ee-251d-470a-a062-fa1922dfa9a8"
  *
- * AT+ADDR?<CR> 
- * AT+VERR?<CR>
- * AT+NAME?<CR> (AT+NAMERYAN)
- * AT+PASS?<CR> (AT+PASS123456)
- * AT+ROLE?<CR> (0 for peripheral, 1 for central). AT+ROLE0 to set
+ * HM-10 capabilties: http://www.martyncurrey.com/hm-10-bluetooth-4ble-modules/#HM-10_Services_and_Characteristics
  *
- * AT+TYPE2<CR> (set bond mode to authorise, i.e. require password and pair to connect)
+ * Values to TX/RX are only interpreted as AT commands prior to connection 
  *
- * AT+UUID?<CR> (service UUID)
- * AT+CHAR?<CR> (characteristic value)
+ * On device connect, recieve: OK+CONN
+ * 
+ * AT+ADDR? 
+ * AT+VERR?
+ * AT+NAME? (AT+NAMERYAN)
+ * AT+PASS? (AT+PASS123456)
+ * AT+ROLE? (0 for peripheral, 1 for central). AT+ROLE0 to set
+ *
+ * AT+TYPE2 (set bond mode to authorise, i.e. require password and pair to connect)
+ *
+ * AT+UUID? (service UUID)
+ * AT+CHAR? (characteristic value)
  *
  * So, if just reading bytes from TX/RX this is the default characteristic, i.e. can only have 1 characteristic on HM-10?
+ * When writing raw bytes to the TX/RX we are altering the value of the default characteristic (however, does this send it or will remote only get it if they subscribe?)
+ * (remote can directly read, however notification of change also)
  */
 
       // this won't work if device requires pairing or isn't advertising
@@ -434,11 +457,11 @@ LED_TEXT_CHR_UUID = "e95d93ee-251d-470a-a062-fa1922dfa9a8"
       // We could check the Connected property prior to attempting a connection using an appropriate Get()
 
       /*
-        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/", 
+        l_dbus_add_signal_watch(global_dbus_connection, "org.bluez", "/", 
                                 "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved", 
                                 L_DBUS_MATCH_NONE, dbus_interfaces_removed_callback, NULL);
         IMPORTANT: This PropertiesChanged is only during discovery phase
-        l_dbus_add_signal_watch(dbus_connection, "org.bluez", "/org/bluez/hci0", 
+        l_dbus_add_signal_watch(global_dbus_connection, "org.bluez", "/org/bluez/hci0", 
                                 "org.freedesktop.DBus.Properties", "PropertiesChanged", 
                                 L_DBUS_MATCH_NONE, dbus_properties_changed_callback, NULL);
        */
@@ -446,5 +469,5 @@ LED_TEXT_CHR_UUID = "e95d93ee-251d-470a-a062-fa1922dfa9a8"
       // IMPORTANT(Ryan): InterfacesRemoved could be called during this discovery time
       //if (dbus_interfaces_added_id != 0)
       //{
-      //  l_dbus_remove_signal_watch(dbus_connection, dbus_interfaces_added_id);
+      //  l_dbus_remove_signal_watch(global_dbus_connection, dbus_interfaces_added_id);
       //}
