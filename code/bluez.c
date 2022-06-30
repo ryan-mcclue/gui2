@@ -183,6 +183,7 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
 // 0x2a05 --> 00002a05-0000-1000-8000-00805f9b34fb
 // 0x1801 -- > 00001801-0000-1000-8000-00805f9b34fb
           // probably want dbus path as well
+          // NOTE(Ryan): We could determine UUID from d-feet (allows calling methods as well)
           if (strcmp(service_dict_key, "UUID") == 0)
           {
             
@@ -192,7 +193,10 @@ bluez_interfaces_added_callback(struct l_dbus_message *reply_message)
       }
       else if (strcmp(root_dict_key, "org.bluez.GattCharacteristic1") == 0)
       {
-        // UUID and Flags
+        // UUID and Flags (ensure has 'read' flag)
+        // ReadValue({})
+        // WriteValue(bytes, {}) (if throughput becomes an issue, may have to specify write command instead of request?)
+        // better to just write less than 20 bytes at a time?
       }
       else if (strcmp(root_dict_key, "org.bluez.GattDescriptor1") == 0)
       {
