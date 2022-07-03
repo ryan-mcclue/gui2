@@ -8,17 +8,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <netinet/in.h>
-
-/*
- * mosquitto mosquitto-clients
- * (from package: $(dpkg -S /usr/bin/mosquitto_sub))
- * mosquitto_sub -t "/some/topic"
- * mosquitto_pub -t "/some/topic" -m "hello"
- *
- * So, individual PLCs will subscribe to topics and then publish confirmation to topics?
- * (I suppose advantage of this is easier broadcasting?)
- */
-
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/videodev2.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
 
 
 #if defined(GUI_INTERNAL)
@@ -50,6 +44,134 @@
   #define EBP(name)
   #define ASSERT(cond)
 #endif
+
+typedef struct Camera
+{
+  int fd;
+  u8 *buffer;
+  u32 buffer_size;
+  u32 buffer_len;
+} Camera;
+
+INTERNAL Camera
+camera_init(const char *camera_path, u32 aperture_width, u32 aperture_height)
+{
+  Camera result = {0};
+
+  result.fd = open(camera_path, O_RDWR);
+  if (result.fd >= 0)
+  {
+    struct v4l2_format camera_format = {0};
+    camera_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    camera_format.fmt.pix.width = aperture_width;
+    camera_format.fmt.pix.height = aperture_height;
+    // NOTE(Ryan): Determine with $(v4l2-ctl --list-formats-ext) 
+    camera_format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+    camera_format.fmt.pix.field = V4L2_FIELD_NONE;
+    int camera_format_status = ioctl(result.fd, VIDIOC_S_FMT, &camera_format);
+    if (camera_format_status >= 0)
+    {
+      struct v4l2_requestbuffers camera_buffer_request = {0};
+      camera_buffer_request.count = 1;
+      camera_buffer_request.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+      camera_buffer_request.memory = V4L2_MEMORY_MMAP;
+      int camera_buffer_request_status = ioctl(result.fd, VIDIOC_REQBUFS, 
+                                               &camera_buffer_request);
+      if (camera_buffer_request_status >= 0)
+      {
+        struct v4l2_buffer camera_buffer_info = {0};
+        camera_buffer_info.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        camera_buffer_info.memory = V4L2_MEMORY_MMAP;
+        camera_buffer_info.index = 0;
+        int camera_buffer_info_status = ioctl(result.fd, VIDIOC_QUERYBUF, &camera_buffer_info);
+        if (camera_buffer_info_status >= 0)
+        {
+          result.buffer = mmap(NULL, camera_buffer_info.length, PROT_READ | PROT_WRITE, 
+                               MAP_SHARED, result.fd, camera_buffer_info.m.offset);
+          if (result.buffer != NULL)
+          {
+            result.buffer_size = camera_buffer_info.length;
+
+            int camera_streamon_status = ioctl(result.fd, VIDIOC_STREAMON, 
+                                               &camera_buffer_info.type);
+            if (camera_streamon_status == -1)
+            {
+              EBP();
+            }
+          }
+          else
+          {
+            EBP();
+          }
+        }
+        else
+        {
+          EBP();
+        }
+
+      }
+      else
+      {
+        EBP();
+      }
+    }
+    else
+    {
+      EBP();
+    }
+  }
+  else
+  {
+    EBP();
+  }
+
+  return result;
+}
+
+INTERNAL void
+camera_take_picture(Camera *camera)
+{
+  struct v4l2_buffer camera_capture_buffer = {0};
+  camera_capture_buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  camera_capture_buffer.memory = V4L2_MEMORY_MMAP;
+  camera_capture_buffer.index = 0;
+  int camera_query_capture_buffer_status = ioctl(camera->fd, VIDIOC_QBUF, 
+                                                 &camera_capture_buffer);
+  if (camera_query_capture_buffer_status >= 0)
+  {
+    fd_set camera_fd_set;
+    FD_ZERO(&camera_fd_set);
+    FD_SET(camera->fd, &camera_fd_set);
+
+    struct timeval camera_wait_for_capture_frame_time = {0};
+    camera_wait_for_capture_frame_time.tv_sec = 2;
+    int num_returned_fds = select(camera->fd + 1, &camera_fd_set, NULL, NULL, 
+                                  &camera_wait_for_capture_frame_time);
+    if (num_returned_fds > 0)
+    {
+      int camera_dequeue_capture_buffer_status = ioctl(camera->fd, VIDIOC_DQBUF, 
+                                                       &camera_capture_buffer);
+      if (camera_dequeue_capture_buffer_status >= 0)
+      {
+        camera->buffer_len = camera_capture_buffer.bytesused;
+      }
+      else
+      {
+        EBP();
+      }
+    }
+    else if (num_returned_fds == -1)
+    {
+      EBP();
+    }
+  }
+  else
+  {
+    EBP();
+  }
+  //int webcam_streamoff_status = ioctl(webcam_fd, VIDIOC_STREAMOFF, &webcam_buffer_info.type);
+  //ASSERT(webcam_streamoff_status != -1);
+}
 
 #define MAX_COMMAND_RESULT_COUNT 4096
 INTERNAL char * 
@@ -266,6 +388,7 @@ main(int argc, char *argv[])
     "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     "<style> body { background-color: #efefef; } </style>\r\n"
     "<h1> Hi There! </h1>\r\n"
+    "<img src='camera.jpeg' />\r\n"
     "<form method='post'>\r\n"
     "  <button name='LED1' value='1'> LED ON </button>\r\n"
     "  <button name='LED2' value='0'> LED OFF </button>\r\n"
@@ -310,11 +433,38 @@ main(int argc, char *argv[])
                 write(client_fd, send_buf, sizeof(send_buf));
                 close(client_fd);
               }
-              //if (strcmp(request_info.uri, "/favicon.ico") == 0)
-              //{
-              //  img = open("favicon.ico");
-              //  sendfile(client, img, size_of_image);
-              //}
+              else if (strcmp(request_info.uri, "/camera.jpeg") == 0)
+              {
+                Camera camera = camera_init("/dev/video0", 1280, 720);
+                ASSERT(camera.fd != -1);
+
+                char camera_multipart_header[] = {
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: multipart/x-mixed-replace; boundary=myboundary\r\n\r\n"
+                };
+                write(client_fd, camera_multipart_header, sizeof(camera_multipart_header));
+
+                u32 camera_picture_boundary_size = camera.buffer_size + 256;
+                char *camera_picture_boundary = malloc(camera_picture_boundary_size);
+                ASSERT(camera_picture_boundary != NULL);
+
+                while (true)
+                {
+                  camera_take_picture(&camera);
+
+                  snprintf(camera_picture_boundary, camera_picture_boundary_size,
+                  "--myboundary\r\nContent-Type: image/jpeg\r\nContent-length: %d\r\n\r\n",
+                  camera.buffer_len);
+
+                  u32 camera_picture_boundary_header_size = strlen(camera_picture_boundary);
+
+                  memcpy(camera_picture_boundary + camera_picture_boundary_header_size,
+                         camera.buffer, camera.buffer_len);
+                  
+                  write(client_fd, camera_picture_boundary, 
+                        camera_picture_boundary_header_size + camera.buffer_len);
+                }
+              }
             }
             else
             {
